@@ -6,14 +6,18 @@ export function expand(f) {
   return [...f, h * h, bsV * bsV, h * bsV];
 }
 
-export function fitRidge(X, Y, lambdaPerSample = 0.03) {
+// weights: peso di ogni esempio (facoltativo, 1 = normale).
+export function fitRidge(X, Y, lambdaPerSample = 0.03, weights = null) {
   const n = X.length;
   const d = X[0].length;
 
+  // Media, deviazione e regolarizzazione pesate: gli esempi con peso ~0 non devono contare.
+  const w = (k) => (weights ? weights[k] : 1);
+  const total = weights ? weights.reduce((s, v) => s + v, 0) : n;
   const mean = new Array(d).fill(0);
   const std = new Array(d).fill(0);
-  for (const row of X) row.forEach((x, j) => (mean[j] += x / n));
-  for (const row of X) row.forEach((x, j) => (std[j] += (x - mean[j]) ** 2 / n));
+  X.forEach((row, k) => row.forEach((x, j) => (mean[j] += (w(k) * x) / total)));
+  X.forEach((row, k) => row.forEach((x, j) => (std[j] += (w(k) * (x - mean[j]) ** 2) / total)));
   for (let j = 0; j < d; j++) std[j] = Math.sqrt(std[j]) || 1;
 
   const D = d + 1;
@@ -23,14 +27,15 @@ export function fitRidge(X, Y, lambdaPerSample = 0.03) {
 
   X.forEach((row, k) => {
     const z = standardize(row, mean, std);
+    const wk = w(k);
     for (let i = 0; i < D; i++) {
-      bx[i] += z[i] * Y[k][0];
-      by[i] += z[i] * Y[k][1];
-      for (let j = 0; j < D; j++) A[i][j] += z[i] * z[j];
+      bx[i] += wk * z[i] * Y[k][0];
+      by[i] += wk * z[i] * Y[k][1];
+      for (let j = 0; j < D; j++) A[i][j] += wk * z[i] * z[j];
     }
   });
   // Il termine costante (indice 0) non viene regolarizzato.
-  for (let i = 1; i < D; i++) A[i][i] += lambdaPerSample * n;
+  for (let i = 1; i < D; i++) A[i][i] += lambdaPerSample * total;
 
   return { mean, std, wx: solve(A, bx), wy: solve(A, by) };
 }

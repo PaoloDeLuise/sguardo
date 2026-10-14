@@ -22,10 +22,9 @@ Chi assiste preme **Avvia fotocamera** una volta (il browser lo richiede). Da l�
 si fa con gli occhi:
 
 1. La prima volta: calibrazione completa, seguendo con gli occhi il punto che scivola da una
-   posizione all'altra (circa 50 secondi). Si usano anche i dati raccolti durante il movimento,
-   ma solo se sui punti di verifica migliorano la stima: ogni calibrazione lo controlla da sola. Le volte
-   successive basta una **ricalibrazione rapida** di 10 secondi: il modello usa tutte le
-   calibrazioni salvate su questo dispositivo, e ogni sessione lo rende più robusto.
+   posizione all'altra e fissandolo quando si ferma (circa 50 secondi). Le volte
+   successive basta una **ricalibrazione rapida** di 10 secondi: il modello usa anche le
+   calibrazioni salvate su questo dispositivo, pesate per quanto la loro postura somiglia a quella attuale.
 2. Dopo la calibrazione completa si sceglie **Continua** o **Ricalibra** fissando la cella;
    dopo 10 secondi si prosegue da soli.
 3. Se la persona cambia postura (testa spostata o inclinata per più di 3 secondi), compare un
