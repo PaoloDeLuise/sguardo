@@ -21,7 +21,9 @@ accettare l'avviso del browser.
 Chi assiste preme **Avvia fotocamera** una volta (il browser lo richiede). Da lì in poi tutto
 si fa con gli occhi:
 
-1. La prima volta: calibrazione completa, seguendo il punto (circa 40 secondi). Le volte
+1. La prima volta: calibrazione completa, seguendo con gli occhi il punto che scivola da una
+   posizione all'altra (circa 50 secondi). Si usano anche i dati raccolti durante il movimento,
+   ma solo se sui punti di verifica migliorano la stima: ogni calibrazione lo controlla da sola. Le volte
    successive basta una **ricalibrazione rapida** di 10 secondi: il modello usa tutte le
    calibrazioni salvate su questo dispositivo, e ogni sessione lo rende più robusto.
 2. Dopo la calibrazione completa si sceglie **Continua** o **Ricalibra** fissando la cella;
@@ -108,6 +110,7 @@ non su una sola: tra una sessione e l'altra cambiano postura e luce.
 | `js/posture.js` | Riconosce i cambi di postura rispetto all'ultima calibrazione |
 | `tools/evaluate-drift.mjs` | Errore dopo un cambio di postura, con e senza correzione rapida |
 | `tools/test-posture.mjs` | Prove di postura e archivio sulle registrazioni |
+| `tools/test-calibration.mjs` | Prove delle etichette dei dati raccolti con il punto in movimento |
 | `js/board.js` | Griglia di celle con selezione a fissazione (dwell) |
 | `js/keyboard.js` | Tastiera a due passaggi e frasi rapide |
 | `js/predictor.js` | Suggerimento parole: frequenze italiane + parole e coppie usate dalla persona |

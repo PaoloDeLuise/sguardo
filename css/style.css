@@ -238,7 +238,7 @@ button:disabled { opacity: 0.5; cursor: default; }
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: left 0.5s ease-in-out, top 0.5s ease-in-out, transform 0.3s;
+  transition: transform 0.3s; /* il movimento è animato da calibration.js */
 }
 #calib-target span { width: 8px; height: 8px; border-radius: 50%; background: #fff; }
 #calib-target.collecting { transform: scale(0.5); background: var(--accent); }

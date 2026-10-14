@@ -1,7 +1,7 @@
 import { GazeTracker } from "./tracker.js";
 import { predict } from "./regression.js";
 import { OneEuro } from "./filter.js";
-import { Aborted, CALIB_POINTS, Calibrator, QUICK_POINTS, VALIDATION_POINTS, cleanSamples } from "./calibration.js";
+import { Aborted, CALIB_POINTS, Calibrator, QUICK_POINTS, VALIDATION_POINTS, cleanSamples, pursuitExamples } from "./calibration.js";
 import { DwellBoard } from "./board.js";
 import { Keyboard, DEFAULT_PHRASES, display } from "./keyboard.js";
 import { ClonedVoice } from "./voice.js";
@@ -40,7 +40,10 @@ const voice = new ClonedVoice();
 const filterX = new OneEuro();
 const filterY = new OneEuro();
 
-const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, ...load(SETTINGS_KEY) };
+// pursuitLag: ritardo (ms) con cui usare i dati dell'inseguimento, o null se peggiorano la stima
+// (lo decide ogni calibrazione completa confrontando le varianti sui punti di verifica).
+const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, pursuitLag: null, ...load(SETTINGS_KEY) };
+const PURSUIT_LAGS = [100, 200, 300];
 let keyboard = null;
 let dasher = null;
 let eyesClosed = false;
@@ -359,31 +362,45 @@ async function calibrate(kind = "full") {
       quick ? 2000 : 3000,
     );
     const calib = await calibrator.runPoints(quick ? QUICK_POINTS : CALIB_POINTS, sampler);
-    const points = calib.map(({ point, samples }) => ({ point, samples: usable(samples) }));
-    if (points.reduce((s, p) => s + p.samples.length, 0) < calib.length * 8) {
+    const points = calib.fixations.map(({ point, samples }) => ({ point, samples: usable(samples) }));
+    if (points.reduce((s, p) => s + p.samples.length, 0) < calib.fixations.length * 8) {
       throw new Error("Non ho visto il viso abbastanza a lungo. Controlla la luce e che il volto sia inquadrato.");
     }
-    const pose = meanPose(calib.flatMap(({ samples }) => samples.map((s) => s.pose)));
+    const pose = meanPose(calib.fixations.flatMap(({ samples }) => samples.map((s) => s.pose)));
+    const pursuit = calib.pursuit.map(({ segment, samples }) => ({ segment, samples: samples.filter((f) => !f.blink) }));
 
     let stats = null;
     let validation = [];
+    let pursuitPoints = settings.pursuitLag === null ? [] : pursuitExamples(pursuit, settings.pursuitLag);
     if (!quick) {
-      // Errore misurato su punti che il modello non ha visto.
-      const candidate = pool.train(points.map(({ point, samples }) => ({ point, samples: cleanSamples(samples) })));
       calibrator.msg.textContent = "";
-      validation = await calibrator.runPoints(VALIDATION_POINTS, sampler);
-      stats = measureError(candidate, validation);
+      validation = (await calibrator.runPoints(VALIDATION_POINTS, sampler)).fixations;
+      // Si confronta il modello senza e con i dati dell'inseguimento (a vari ritardi) su punti
+      // che nessuna variante ha visto, e si tiene la migliore: l'inseguimento non può peggiorare.
+      const fixed = points.map(({ point, samples }) => ({ point, samples: cleanSamples(samples) }));
+      const variants = [null, ...PURSUIT_LAGS].map((lag) => {
+        const extra = lag === null ? [] : pursuitExamples(pursuit, lag);
+        return { lag, extra, stats: measureError(pool.train([...fixed, ...extra]), validation) };
+      }).filter((v) => !v.stats.error);
+      if (!variants.length) throw new Error("Nessun dato durante la verifica: il viso non era visibile.");
+      const best = variants.reduce((a, b) => (b.stats.meanPx < a.stats.meanPx ? b : a));
+      const without = variants.find((v) => v.lag === null);
+      settings.pursuitLag = best.lag;
+      save(SETTINGS_KEY, settings);
+      pursuitPoints = best.extra;
+      stats = { ...best.stats, pursuit: { lag: best.lag, withoutPx: without?.stats.meanPx, count: best.extra.length } };
       lastSession = {
         date: new Date().toISOString(),
         userAgent: navigator.userAgent,
         screen: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio },
         video: { w: video.videoWidth, h: video.videoHeight },
-        calib,
+        calib: calib.fixations,
         validation,
+        pursuit: calib.pursuit,
       };
     }
 
-    pool.add(kind, [...points, ...validation.map(({ point, samples }) => ({ point, samples: usable(samples) }))], pose);
+    pool.add(kind, [...points, ...validation.map(({ point, samples }) => ({ point, samples: usable(samples) })), ...pursuitPoints], pose);
     clickSession = null; // i clic successivi vanno in una sessione nuova
     model = pool.train();
     posture.setBaseline(pose);
@@ -449,6 +466,7 @@ function showResult(r) {
     $("#result-title").textContent = "Calibrazione completata";
     body.innerHTML = `
       <div>Errore medio <span class="big-number">${Math.round(r.meanPx)} px</span> (${pct}% della diagonale)</div>
+      <p>${pursuitText(r.pursuit)}</p>
       <p>Calibrazioni salvate: ${r.sessions}. Più sono, più la stima regge ai cambi di postura.</p>
       <p>Fissa una delle due celle, oppure continuo da solo tra <b id="result-count"></b> secondi.</p>`;
     resultBoard.setLayout(2, 1, [{ label: "Ricalibra", kind: "cmd", action: () => calibrate("full") }, goOn]);
@@ -463,6 +481,12 @@ function showResult(r) {
     // Senza calibrazione lo sguardo non funziona ancora: si riprova da soli.
     startCountdown(15, () => {}, () => calibrate("full"));
   }
+}
+
+function pursuitText(p) {
+  if (!p) return "";
+  if (p.lag === null) return "Dati raccolti mentre il punto si muoveva: non usati, questa volta peggioravano la stima.";
+  return `Dati raccolti mentre il punto si muoveva: usati (${p.count} esempi), errore senza di loro ${Math.round(p.withoutPx)} px.`;
 }
 
 // Campioni utilizzabili per il calcolo: senza battiti di ciglia.

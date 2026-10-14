@@ -24,12 +24,19 @@ export const VALIDATION_POINTS = [
 
 export class Aborted extends Error {}
 
+// Velocità del punto che scivola da una posizione all'altra (frazioni di schermo al secondo):
+// abbastanza lenta da poterlo seguire con gli occhi senza scatti.
+const GLIDE_SPEED = 0.6;
+const MIN_GLIDE_MS = 500;
+const MAX_GLIDE_MS = 1600;
+
 export class Calibrator {
   constructor(overlay, target, msg) {
     this.overlay = overlay;
     this.target = target;
     this.msg = msg;
     this.aborted = false;
+    this.position = [0.5, 0.5];
   }
 
   abort() { this.aborted = true; }
@@ -47,18 +54,48 @@ export class Calibrator {
   }
 
   moveTarget([x, y]) {
+    this.position = [x, y];
     this.target.style.left = `${x * 100}%`;
     this.target.style.top = `${y * 100}%`;
   }
 
-  // sampler.start() inizia a raccogliere, sampler.stop() restituisce i campioni,
-  // sampler.stable() dice se l'occhio è fermo. La raccolta parte quando l'occhio
-  // si è fermato sul punto, o comunque dopo maxSettleMs.
-  async runPoints(points, sampler, { minSettleMs = 700, maxSettleMs = 2000, collectMs = 1000 } = {}) {
-    const results = [];
+  // Sposta il punto a velocità costante. Restituisce il tratto percorso: { t0, t1, from, to }
+  // (tempi di performance.now, lo stesso orologio dei fotogrammi).
+  async glideTo(to) {
+    const from = this.position;
+    const ms = Math.min(MAX_GLIDE_MS, Math.max(MIN_GLIDE_MS, (Math.hypot(to[0] - from[0], to[1] - from[1]) / GLIDE_SPEED) * 1000));
+    const t0 = performance.now();
+    await new Promise((resolve) => {
+      const frame = (t) => {
+        const k = Math.min(1, (t - t0) / ms);
+        this.moveTarget([from[0] + (to[0] - from[0]) * k, from[1] + (to[1] - from[1]) * k]);
+        if (k < 1 && !this.aborted) requestAnimationFrame(frame);
+        else resolve();
+      };
+      requestAnimationFrame(frame);
+    });
+    if (this.aborted) throw new Aborted();
+    return { t0, t1: t0 + ms, from, to };
+  }
+
+  // Per ogni punto: il punto scivola fin lì (gli occhi lo inseguono: si registra anche questo),
+  // poi si aspetta che l'occhio sia fermo e si raccolgono i campioni.
+  // sampler.start() inizia a raccogliere, sampler.stop() restituisce i fotogrammi,
+  // sampler.stable() dice se l'occhio è fermo.
+  // Restituisce { fixations: [{ point, samples }], pursuit: [{ segment, samples }] }.
+  async runPoints(points, sampler, { minSettleMs = 400, maxSettleMs = 2000, collectMs = 1000 } = {}) {
+    const fixations = [];
+    const pursuit = [];
     for (const p of points) {
       this.target.classList.remove("collecting");
-      this.moveTarget(p);
+      sampler.start();
+      let segment;
+      try {
+        segment = await this.glideTo(p);
+      } finally {
+        const samples = sampler.stop();
+        if (segment) pursuit.push({ segment, samples });
+      }
       await this.sleep(minSettleMs);
       for (let waited = minSettleMs; waited < maxSettleMs && !sampler.stable(); waited += 50) {
         await this.sleep(50);
@@ -68,12 +105,28 @@ export class Calibrator {
       try {
         await this.sleep(collectMs);
       } finally {
-        results.push({ point: p, samples: sampler.stop() });
+        fixations.push({ point: p, samples: sampler.stop() });
       }
     }
     this.target.classList.remove("collecting");
-    return results;
+    return { fixations, pursuit };
   }
+}
+
+// Esempi presi mentre gli occhi inseguivano il punto: ogni fotogramma ha come etichetta la
+// posizione del punto lagMs prima (l'occhio insegue con un po' di ritardo). Si scarta l'inizio
+// di ogni tratto, quando l'occhio sta ancora raggiungendo il punto con uno scatto.
+// frames: [{ t, features }] già senza battiti di ciglia.
+export function pursuitExamples(pursuit, lagMs, skipMs = 250) {
+  const out = [];
+  for (const { segment: { t0, t1, from, to }, samples } of pursuit) {
+    for (const f of samples) {
+      if (f.t < t0 + skipMs || f.t > t1 + lagMs) continue;
+      const k = Math.min(1, Math.max(0, (f.t - lagMs - t0) / (t1 - t0)));
+      out.push({ point: [from[0] + (to[0] - from[0]) * k, from[1] + (to[1] - from[1]) * k], samples: [f.features] });
+    }
+  }
+  return out;
 }
 
 // Scarta i campioni presi mentre l'occhio non era fermo sul punto: iride orizzontale,
