@@ -1,0 +1,13 @@
+# Voce clonata (facoltativa), con Coqui XTTS-v2. Da installare in un ambiente separato:
+#   python -m venv .venv-voce
+#   .venv-voce\Scripts\python -m pip install -r requirements-voce.txt
+#   .venv-voce\Scripts\python serve.py
+# Serve anche ffmpeg nel PATH. Il modello (circa 1,8 GB, licenza Coqui Public Model License,
+# solo uso non commerciale) viene scaricato solo dopo averne accettato la licenza nella pagina.
+-r requirements.txt
+coqui-tts==0.27.5
+# Versioni provate su Windows senza scheda grafica: con torchaudio 2.9+ la lettura dell'audio
+# richiede torchcodec; con transformers 5 coqui-tts 0.27.5 non si avvia.
+torch==2.8.0
+torchaudio==2.8.0
+transformers>=4.57,<4.58

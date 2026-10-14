@@ -1,0 +1,15 @@
+data/parole-it.txt
+
+Le 30.000 parole italiane più frequenti, in ordine di frequenza, ricavate da
+FrequencyWords di Hermit Dave (https://github.com/hermitdave/FrequencyWords,
+file content/2018/it/it_50k.txt), a sua volta basato sui sottotitoli di OpenSubtitles.
+
+Modifiche: tenute solo le parole alfabetiche, tolti i conteggi, preferita la forma
+accentata quando i sottotitoli riportano la stessa parola con e senza accento
+(perche -> perché).
+
+Licenza: i dati di FrequencyWords sono distribuiti con licenza
+Creative Commons Attribuzione - Condividi allo stesso modo 4.0 Internazionale (CC BY-SA 4.0),
+https://creativecommons.org/licenses/by-sa/4.0/
+Questo file, essendo un adattamento, è distribuito con la stessa licenza.
+(Il codice di FrequencyWords è invece MIT; qui non ne viene usato.)

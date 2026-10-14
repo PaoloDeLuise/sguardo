@@ -1,0 +1,15 @@
+# Registrazioni di calibrazione: contengono i punti del viso di chi le ha fatte.
+recordings/
+
+# Campioni di voce: sono dati personali.
+voce/
+
+# Certificato autofirmato generato da serve.py --https
+.cert/
+
+.playwright-mcp/
+node_modules/
+__pycache__/
+.venv/
+.venv-voce/
+.venv-xtts/

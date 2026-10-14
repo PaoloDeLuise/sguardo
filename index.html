@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1115">
+  <title>Sguardo</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2714%27 fill=%27%231a1d24%27 stroke=%27%234fc3f7%27 stroke-width=%273%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%275%27 fill=%27%234fc3f7%27/%3E%3C/svg%3E">
+</head>
+<body>
+  <!-- Schermata iniziale -->
+  <section id="start" class="screen">
+    <h1>Sguardo</h1>
+    <p class="lead">Scrivere e parlare con gli occhi.</p>
+    <ul class="tips">
+      <li>Metti il dispositivo fermo, all'altezza degli occhi, a 40–70 cm.</li>
+      <li>Serve luce sul viso: evita finestre alle spalle.</li>
+      <li>Durante la calibrazione segui il punto solo con gli occhi.</li>
+    </ul>
+    <button id="btn-start" class="big">Avvia fotocamera</button>
+    <p id="start-status" class="status"></p>
+
+    <!-- Voce clonata: la prepara chi assiste, una volta sola -->
+    <div id="voice-setup" class="voice-card" hidden>
+      <h2>Voce</h2>
+      <p id="voice-status" class="status"></p>
+      <label id="voice-license" class="license" hidden>
+        <input type="checkbox" id="voice-license-check">
+        <span>Accetto la <a href="https://coqui.ai/cpml" target="_blank" rel="noopener">licenza del modello XTTS-v2</a>
+        (Coqui Public Model License: solo uso non commerciale). Al primo uso il modello (circa 1,8 GB) viene scaricato.</span>
+      </label>
+      <div id="voice-controls" class="voice-controls">
+        <label class="file-button">Scegli vocali
+          <input type="file" id="voice-files" accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav" multiple>
+        </label>
+        <button id="btn-record">● Registra</button>
+        <span id="voice-files-label" class="muted"></span>
+        <button id="btn-clone">Clona la voce</button>
+      </div>
+      <div id="record-panel" class="record-panel" hidden>
+        <p class="muted">Leggi ad alta voce, con calma e con il tono di tutti i giorni (bastano 20–30 secondi):</p>
+        <p class="read-aloud">Buongiorno! Oggi è una bella giornata e ho voglia di fare due chiacchiere.
+          Stamattina ho bevuto un caffè e ho letto il giornale. Più tardi vorrei sentire i miei amici,
+          magari organizzare una cena insieme, con un buon piatto di pasta e un bicchiere di vino.
+          Che ne dite? Io direi di sì, ci divertiremmo davvero tanto.</p>
+        <div class="voice-controls">
+          <span id="record-time" class="record-time">0:00</span>
+          <button id="btn-record-stop">■ Ferma</button>
+        </div>
+      </div>
+      <audio id="record-preview" controls hidden></audio>
+      <div id="voice-try" class="voice-controls" hidden>
+        <input id="voice-test" value="Ciao, questa è la mia voce." aria-label="Frase di prova">
+        <button id="btn-voice-test">Ascolta</button>
+        <button id="btn-voice-reset" class="secondary">Elimina voce</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Barra per chi assiste (si usa con mouse/tocco, non con lo sguardo) -->
+  <header id="toolbar" hidden>
+    <div class="cam">
+      <video id="video" playsinline muted></video>
+      <span id="face-status" class="face-status">…</span>
+    </div>
+    <div id="last-spoken" class="last-spoken"></div>
+    <div class="controls">
+      <span class="dwell">
+        Fissazione
+        <button id="dwell-minus" aria-label="Riduci tempo">−</button>
+        <b id="dwell-value">1.0 s</b>
+        <button id="dwell-plus" aria-label="Aumenta tempo">+</button>
+      </span>
+      <button id="btn-dot">Punto: sì</button>
+      <button id="btn-calib">Ricalibra</button>
+      <button id="btn-reset" title="Cancella tutte le calibrazioni salvate (per una persona diversa)">Nuova persona</button>
+    </div>
+  </header>
+
+  <!-- Testo in composizione -->
+  <div id="compose" hidden><span id="compose-text"></span><span class="caret"></span><span class="hint">occhi chiusi 2 s → menu</span></div>
+
+  <!-- Tabellone: tastiera e frasi rapide -->
+  <main id="board" hidden></main>
+
+  <!-- Scrittura continua (Dasher) -->
+  <canvas id="dasher" hidden></canvas>
+
+  <!-- Calibrazione -->
+  <section id="calib" hidden>
+    <div id="calib-target"><span></span></div>
+    <p id="calib-msg"></p>
+  </section>
+
+  <!-- Risultato calibrazione: le scelte si fanno con lo sguardo -->
+  <section id="result" hidden>
+    <div class="result-info">
+      <h2 id="result-title"></h2>
+      <div id="result-body"></div>
+      <div class="row">
+        <button id="btn-diag" hidden>Vedi errori</button>
+        <button id="btn-download" hidden>Salva dati</button>
+      </div>
+    </div>
+    <div id="result-cells" class="cells"></div>
+  </section>
+
+  <!-- Avviso: postura cambiata, ricalibrazione rapida in arrivo -->
+  <section id="prompt" hidden>
+    <div class="prompt-info">
+      <h2>Hai cambiato posizione</h2>
+      <p>Ricalibrazione rapida tra <b id="prompt-count">5</b> secondi: segui il punto con gli occhi.</p>
+    </div>
+    <div id="prompt-cells" class="cells"></div>
+  </section>
+
+  <div id="toast" hidden></div>
+
+  <canvas id="diag" hidden></canvas>
+
+  <div id="gaze-dot" hidden></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

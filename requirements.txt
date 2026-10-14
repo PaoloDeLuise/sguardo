@@ -1,0 +1,3 @@
+# Sguardo: la parte web gira nel browser e serve.py usa solo la libreria standard di Python.
+# Questo pacchetto serve solo per `python serve.py --https` (prove dal telefono).
+cryptography>=42
