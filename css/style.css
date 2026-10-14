@@ -217,7 +217,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 @keyframes blink { 50% { opacity: 0; } }
 
 /* Modalità mouse: niente fotocamera né calibrazione */
-#toolbar.mouse .cam, #toolbar.mouse #btn-calib { display: none; }
+#toolbar.mouse .cam, #toolbar.mouse #btn-calib, #toolbar.mouse #btn-last-result { display: none; }
 .cell.selected { animation: flash 0.6s ease-out; }
 @keyframes flash {
   from { background: var(--accent); color: #0b1a22; }

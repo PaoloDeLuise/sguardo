@@ -53,6 +53,7 @@ let mode = "start";
 let collecting = null;
 let gaze = null;
 let lastSession = null;
+let lastResult = null; // per riaprire il risultato dalla barra
 let lastRecalAt = 0;
 let snoozeUntil = 0;
 let eyesClosedSince = null;
@@ -454,7 +455,9 @@ function measureError(m, validation) {
   return { meanPx: errs.reduce((s, e) => s + e, 0) / errs.length, diag, sessions: pool.size };
 }
 
-function showResult(r) {
+// again: riaperta a mano dalla barra (niente proseguimento automatico).
+function showResult(r, again = false) {
+  if (!r.error) lastResult = r;
   const body = $("#result-body");
   const goOn = { label: "Continua", kind: "suggest", action: () => show("board") };
   if (r.error) {
@@ -475,7 +478,9 @@ function showResult(r) {
   $("#btn-download").textContent = "Salva dati";
   $("#btn-download").disabled = false;
   show("result");
-  if (!r.error) {
+  if (again) {
+    $("#result-body").querySelector("p:last-child")?.remove(); // niente "continuo da solo tra…"
+  } else if (!r.error) {
     startCountdown(RESULT_AUTO_SECONDS, (n) => ($("#result-count").textContent = n), () => show("board"));
   } else if (!model) {
     // Senza calibrazione lo sguardo non funziona ancora: si riprova da soli.
@@ -801,6 +806,10 @@ $("#dwell-minus").addEventListener("click", () => changeDwell(-250));
 $("#dwell-plus").addEventListener("click", () => changeDwell(250));
 $("#btn-dot").addEventListener("click", toggleDot);
 $("#btn-calib").addEventListener("click", () => calibrate("full"));
+$("#btn-last-result").addEventListener("click", () => {
+  if (lastResult) showResult(lastResult, true);
+  else toast("Nessuna calibrazione completa da quando hai aperto la pagina: premi Ricalibra.", 4000);
+});
 $("#btn-reset").addEventListener("click", () => {
   if (!pool || !confirm("Cancellare tutte le calibrazioni salvate? Serve quando cambia la persona che usa Sguardo.")) return;
   pool.clear();
