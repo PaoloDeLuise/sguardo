@@ -2,6 +2,9 @@
 // sintesi vocale del browser.
 
 const MAX_CACHED = 60;
+// serve.py accetta richieste che modificano qualcosa solo con questa intestazione:
+// un altro sito non può aggiungerla (protezione dalle richieste partite da altri siti).
+export const API_HEADERS = { "X-Sguardo": "1" };
 
 export class ClonedVoice {
   constructor() {
@@ -51,7 +54,7 @@ export class ClonedVoice {
     if (!this.cache.has(text)) {
       const pending = fetch("/api/tts", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...API_HEADERS, "Content-Type": "application/json" },
         body: JSON.stringify({ text, keep }),
       }).then(async (res) => {
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
@@ -99,7 +102,7 @@ export class ClonedVoice {
 }
 
 async function post(path, body) {
-  const res = await fetch(path, { method: "POST", body });
+  const res = await fetch(path, { method: "POST", headers: API_HEADERS, body });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;

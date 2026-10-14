@@ -113,7 +113,7 @@ class VoiceEngine:
                 if QUANTIZE:
                     quantize_gpt(model)
                 if LATENTS.exists():
-                    saved = torch.load(LATENTS)
+                    saved = torch.load(LATENTS, weights_only=True)  # solo tensori: niente codice eseguibile
                     self.latents = (saved["gpt"], saved["speaker"])
                 self.model = model
                 self.state = "pronto"

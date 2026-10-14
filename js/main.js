@@ -4,7 +4,7 @@ import { OneEuro } from "./filter.js";
 import { Aborted, CALIB_POINTS, Calibrator, QUICK_POINTS, VALIDATION_POINTS, cleanSamples } from "./calibration.js";
 import { DwellBoard } from "./board.js";
 import { Keyboard, DEFAULT_PHRASES, display } from "./keyboard.js";
-import { ClonedVoice } from "./voice.js";
+import { API_HEADERS, ClonedVoice } from "./voice.js";
 import { Dasher, LetterModel } from "./dasher.js";
 import { Predictor } from "./predictor.js";
 import { CalibrationPool } from "./pool.js";
@@ -527,7 +527,7 @@ async function saveSession() {
   // Con l'archivio delle calibrazioni si può capire offline quale sessione peggiora la stima.
   const json = JSON.stringify({ ...lastSession, pool: pool?.sessions ?? [] });
   try {
-    const res = await fetch("/api/recording", { method: "POST", headers: { "Content-Type": "application/json" }, body: json });
+    const res = await fetch("/api/recording", { method: "POST", headers: { ...API_HEADERS, "Content-Type": "application/json" }, body: json });
     if (!res.ok) throw new Error(res.status);
     const { file } = await res.json();
     button.textContent = `Salvato in ${file}`;
@@ -622,6 +622,14 @@ function renderVoice(message) {
   if (!s.installed) {
     el.textContent = "Voce clonata non installata: Sguardo userà la voce del browser (vedi README, requirements-voce.txt).";
     $("#voice-controls").hidden = $("#voice-try").hidden = true;
+    return;
+  }
+  if (!s.local) {
+    // Dal telefono (serve.py --https): la voce si usa, ma si prepara solo dal PC.
+    el.textContent = s.cloned && s.license
+      ? "Voce clonata pronta (si prepara e si modifica dal PC su cui gira Sguardo)."
+      : "Nessuna voce clonata: si prepara dal PC su cui gira Sguardo. Intanto si usa la voce del dispositivo.";
+    $("#voice-controls").hidden = $("#voice-try").hidden = $("#voice-license").hidden = true;
     return;
   }
   $("#voice-license").hidden = s.license;

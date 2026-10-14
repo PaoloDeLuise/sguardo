@@ -1,77 +1,170 @@
 # Sguardo
 
-Comunicare con gli occhi usando una normale webcam, da PC o telefono, senza installare nulla.
-Il tracciamento gira nel browser con MediaPipe Face Landmarker: il video non lascia mai il dispositivo.
+Scrivere e parlare con gli occhi usando una normale webcam, da PC o telefono.
+Pensato per persone che non possono muoversi né parlare (per esempio con SLA), e per chi le assiste.
 
-## Provarlo
+- **Tracciamento dello sguardo nel browser** con MediaPipe Face Landmarker: il video della
+  fotocamera non lascia mai il dispositivo.
+- **Tastiera a due passaggi** con suggerimento delle parole, **frasi rapide** e frasi personali,
+  **scrittura continua** (alla Dasher) come alternativa.
+- **Voce clonata** (facoltativa) dalla voce della persona, con pochi vocali o una registrazione,
+  generata sul PC senza servizi esterni.
+- Si usa tutto con gli occhi: selezione fissando una cella, menu chiudendo gli occhi per 2 secondi,
+  ricalibrazione automatica quando la persona cambia postura.
 
-Serve Python 3 (solo per servire i file).
+## Cosa serve
+
+| Per | Serve |
+|---|---|
+| Usare Sguardo | Un browser recente (Chrome, Edge, Firefox, Safari) e una webcam qualsiasi, anche quella del portatile o del telefono |
+| Avviarlo sul proprio PC | [Python](https://www.python.org/downloads/) 3.10–3.13 (provato con 3.12), solo per servire i file |
+| La voce clonata (facoltativa) | Python 3.10–3.13, [ffmpeg](https://ffmpeg.org/download.html), circa 4 GB di spazio (librerie + modello), un PC qualsiasi: non serve una scheda grafica |
+| Gli strumenti di analisi (facoltativi) | [Node.js](https://nodejs.org/) 20 o successivo |
+
+**Python non è obbligatorio.** La parte che segue gli occhi, la tastiera e i suggerimenti è una
+pagina web statica: funziona con qualunque server di file, per esempio GitHub Pages, e in quel
+caso usa la voce del browser. Python serve solo per avviarla sul proprio PC con `serve.py` e per
+la voce clonata.
+
+## Installazione
 
 ```
-python serve.py            # su questo PC: http://localhost:8000
-python serve.py --https    # anche dal telefono, sulla stessa Wi-Fi
+git clone https://github.com/PaoloDeLuise/sguardo.git
+cd sguardo
 ```
 
-La fotocamera nel browser funziona solo su `localhost` o in HTTPS. Con `--https` il
-certificato è autofirmato (richiede il pacchetto `cryptography`): sul telefono bisogna
-accettare l'avviso del browser.
+(oppure scarica lo ZIP del repository e decomprimilo).
+
+### Solo tracciamento e tastiera
+
+Non c'è niente da installare: basta Python.
+
+```
+python serve.py
+```
+
+e apri **http://localhost:8000**. Su macOS e Linux il comando può essere `python3`.
+
+### Con la voce clonata
+
+1. Installa ffmpeg:
+   - Windows: `winget install Gyan.FFmpeg` (poi riapri il terminale)
+   - macOS: `brew install ffmpeg`
+   - Linux (Debian/Ubuntu): `sudo apt install ffmpeg`
+2. Crea un ambiente Python separato e installa le dipendenze (circa 1,5 GB):
+
+   Windows:
+   ```
+   python -m venv .venv-voce
+   .venv-voce\Scripts\python -m pip install -r requirements-voce.txt
+   .venv-voce\Scripts\python serve.py
+   ```
+   macOS / Linux:
+   ```
+   python3 -m venv .venv-voce
+   .venv-voce/bin/python -m pip install -r requirements-voce.txt
+   .venv-voce/bin/python serve.py
+   ```
+3. Apri **http://localhost:8000**. Nella sezione **Voce** della schermata iniziale:
+   1. accetta la licenza del modello XTTS-v2 (solo uso non commerciale, vedi [Licenze](#licenze)):
+      solo allora il modello (circa 1,8 GB) viene scaricato, una volta sola;
+   2. scegli 10–30 secondi di vocali della persona (vanno bene quelli di WhatsApp) oppure
+      premi **Registra** e leggi il testo proposto;
+   3. premi **Clona la voce**, poi prova una frase con **Ascolta**.
+
+   Più vocali puliti rendono il timbro più stabile (fino a circa 30 secondi migliora anche
+   l'intonazione). I campioni si sommano: **Elimina voce** riparte da zero.
+
+Da quel momento `serve.py` va avviato sempre con il Python di `.venv-voce`.
+
+## Dal telefono o dal tablet
+
+La fotocamera nel browser funziona solo da `localhost` o in **HTTPS**. Tre modi:
+
+1. **Sito pubblicato (il più semplice, senza voce clonata).** Pubblica il repository con
+   GitHub Pages (*Settings → Pages → Deploy from a branch → main*) e apri l'indirizzo dal telefono.
+   GitHub Pages è gratuito per i repository pubblici.
+2. **Dal PC sulla stessa Wi-Fi (anche con la voce clonata).** Serve il pacchetto `cryptography`
+   per creare il certificato (già incluso se hai installato la voce):
+   ```
+   python -m pip install -r requirements.txt
+   python serve.py --https
+   ```
+   stampa un indirizzo `https://<ip-del-pc>:8443` da aprire sul telefono. Il certificato è
+   autofirmato: il browser mostra un avviso da accettare. Se il telefono non raggiunge il PC:
+   - Windows blocca le connessioni in entrata sulle reti "pubbliche": imposta la Wi-Fi come rete
+     privata, oppure consenti Python nel firewall;
+   - alcune reti (aziendali, ospiti) isolano i dispositivi tra loro: in quel caso usa il modo 3.
+
+   Dal telefono la voce clonata si usa, ma si prepara e si modifica solo dal PC.
+3. **Tunnel HTTPS** (per esempio `cloudflared tunnel --url http://localhost:8000`): funziona da
+   qualunque rete, ma rende la pagina raggiungibile da internet finché il tunnel è aperto.
+
+Il telefono va fissato su un supporto, all'altezza degli occhi. Su uno schermo piccolo conviene
+tenerlo in orizzontale.
 
 ## Uso
 
-Chi assiste preme **Avvia fotocamera** una volta (il browser lo richiede). Da lì in poi tutto
-si fa con gli occhi:
+Chi assiste preme **Avvia fotocamera** una volta (il browser lo richiede). Da lì in poi tutto si fa
+con gli occhi.
 
-1. La prima volta: calibrazione completa, seguendo con gli occhi il punto che scivola da una
-   posizione all'altra e fissandolo quando si ferma (circa 50 secondi). Le volte
-   successive basta una **ricalibrazione rapida** di 10 secondi: il modello usa anche le
-   calibrazioni salvate su questo dispositivo, pesate per quanto la loro postura somiglia a quella attuale.
-2. Dopo la calibrazione completa si sceglie **Continua** o **Ricalibra** fissando la cella;
-   dopo 10 secondi si prosegue da soli.
-3. Se la persona cambia postura (testa spostata o inclinata per più di 3 secondi), compare un
-   avviso e dopo 5 secondi parte la ricalibrazione rapida. Fissando **Non ora** si rimanda di 3 minuti.
-4. Chi assiste può aiutare la calibrazione: cliccando un punto mentre la persona lo guarda (clic destro per non selezionare nulla), quel momento diventa un punto di calibrazione (cerchio verde; grigio se l'occhio si stava muovendo).
-5. **Occhi chiusi per 2 secondi** aprono il menu: ricalibrare, tempo di fissazione, punto visibile.
-   I battiti di ciglia normali non interrompono la fissazione.
-3. Si scrive con la tastiera a due passaggi: si fissa un gruppo di lettere (default 1 s), poi la lettera.
-   La prima riga propone tre parole; **Parla** legge la frase e la cancella; **Frasi** apre le frasi rapide.
-   **Cancella** toglie una lettera; continuando a guardarla toglie una parola intera ogni 1,5 s.
-   I numeri sono in "Z J K W X Y / . , ? 123" → **123**.
-   I suggerimenti imparano dalle frasi pronunciate (salvate solo in questo browser).
+1. **Calibrazione.** La prima volta si segue con gli occhi il punto che scivola da una posizione
+   all'altra, fissandolo quando si ferma (circa 50 secondi). Le volte successive basta una
+   **ricalibrazione rapida** di 10 secondi: il modello usa anche le calibrazioni salvate, pesate per
+   quanto la loro postura somiglia a quella di adesso. Alla fine si sceglie **Continua** o
+   **Ricalibra** fissando la cella (dopo 10 secondi si prosegue da soli).
+2. **Tastiera.** Si fissa un gruppo di lettere (1 secondo), poi la lettera.
+   - La prima riga propone tre parole; i suggerimenti imparano dalle frasi della persona.
+   - **Parla** legge la frase; a testo vuoto diventa **Ripeti**.
+   - **Cancella** toglie una lettera; continuando a guardarla toglie una parola intera ogni 1,5 s.
+   - Numeri e punteggiatura: gruppo **Z J K W X Y / . , ? 123**, poi **123**.
+3. **Frasi.** Dieci frasi per i bisogni (Sì, No, Aiuto, Acqua, Dolore...). In **Le mie frasi** si
+   salva l'ultima frase detta (**Salva**) e si tolgono quelle non più utili.
+4. **Menu: occhi chiusi per 2 secondi.** Ricalibrare, tempo di fissazione, punto visibile,
+   **scrittura continua** (le lettere scorrono da destra, grandi quanto sono probabili: si guarda a
+   destra per avanzare, a sinistra per tornare indietro).
+5. **Cambio di postura.** Se la testa resta spostata o inclinata per più di 3 secondi compare un
+   avviso e dopo 5 secondi parte la ricalibrazione rapida. **Non ora** la rimanda di 3 minuti.
 
-Per provare la tastiera senza fotocamera: `http://localhost:8000/?mouse` (il mouse fa le veci dello sguardo).
+I battiti di ciglia normali non interrompono la fissazione.
 
-Tasti per chi assiste: `C` calibrazione completa, `R` rapida, `M` menu, `P` punto, `Esc` interrompe la calibrazione.
-Il pulsante **Nuova persona** cancella le calibrazioni salvate: va usato quando Sguardo passa a un'altra persona.
+**Per chi assiste:**
 
-## Voce clonata (facoltativa)
+- clic su un punto mentre la persona lo guarda = un punto di calibrazione in più (cerchio verde;
+  grigio se l'occhio si stava muovendo). Il clic destro calibra senza selezionare nulla;
+- tasti: `C` calibrazione completa, `R` rapida, `M` menu, `D` scrittura continua, `P` punto,
+  `Esc` interrompe la calibrazione;
+- **Nuova persona** cancella le calibrazioni salvate (quando Sguardo passa a un'altra persona);
+- `http://localhost:8000/?mouse`: il mouse fa le veci dello sguardo, per provare senza fotocamera.
 
-Sguardo può parlare con la voce della persona, ricostruita da pochi vocali (anche quelli di WhatsApp).
-Usa [Coqui XTTS-v2](https://huggingface.co/coqui/XTTS-v2) e funziona solo con il processore, senza
-scheda grafica. Tutto resta sul PC: nessun audio viene inviato a servizi esterni.
+### Tempi della voce clonata
 
-```
-python -m venv .venv-voce
-.venv-voce\Scripts\python -m pip install -r requirements-voce.txt
-.venv-voce\Scripts\python serve.py
-```
+Misurati su un portatile i7-1255U senza scheda grafica: avvio del modello 18 s (una volta),
+clonazione 1–2 s, frase breve 3–5 s, in generale circa 2,5 volte la durata della frase. Su PC più
+lenti i tempi crescono in proporzione. Per non far aspettare la persona:
 
-Serve anche [ffmpeg](https://ffmpeg.org/) nel PATH. Poi, nella schermata iniziale, chi assiste:
+- le frasi rapide e quelle salvate sono generate una volta e conservate (poi partono in 0,2 s);
+- mentre la persona scrive, la frase viene preparata a ogni parola finita;
+- il modello è compresso a 8 bit (circa 30% più veloce; `SGUARDO_INT8=0` lo disattiva);
+- se la voce clonata non risponde si usa la voce del browser.
 
-1. accetta la licenza del modello (vedi sotto): solo allora il modello (circa 1,8 GB) viene scaricato;
-2. sceglie 10–30 secondi di vocali della persona, oppure li registra con **Registra** leggendo il testo proposto, e preme **Clona la voce** (i campioni si sommano: **Elimina voce** per ricominciare);
-3. prova una frase con **Ascolta**.
+## Privacy e sicurezza
 
-**Tempi** misurati su un portatile i7-1255U senza scheda grafica: avvio del modello 18 s (una volta),
-clonazione 1–2 s, generazione circa 2,5 volte la durata della frase (una frase breve in 3–5 s).
-Su PC più lenti i tempi crescono in proporzione. Per non far aspettare la persona:
-
-- le frasi rapide vengono generate una volta e conservate in `voce/frasi/fisse/` (poi partono in 0,2 s);
-- le altre frasi restano solo in una memoria temporanea (`voce/frasi/recenti/`, le ultime 100, al massimo 15 MB);
-- mentre la persona scrive, la frase viene preparata in anticipo a ogni punto o pausa;
-- il modello è compresso a 8 bit (circa 30% più veloce); `SGUARDO_INT8=0` lo disattiva.
-
-Se la voce clonata non è disponibile, Sguardo usa la voce del browser.
-Usare la voce di una persona richiede il suo consenso (o quello di chi la rappresenta).
+- **Video:** elaborato solo nel browser; non viene salvato né inviato.
+- **Dati salvati nel browser** (`localStorage`): calibrazioni, impostazioni, parole e frasi della
+  persona. **Nuova persona** cancella le calibrazioni; i dati del sito si cancellano dalle
+  impostazioni del browser.
+- **Dati salvati sul PC** (solo con `serve.py`): `voce/` (vocali, voce clonata, frasi generate;
+  quelle scritte restano solo le ultime 100) e `recordings/` (calibrazioni salvate con **Salva dati**,
+  contengono i punti del viso). Entrambe le cartelle sono escluse dal repository e `serve.py` non
+  le serve mai.
+- **Connessioni esterne:** solo per scaricare MediaPipe (jsDelivr), il modello del viso (Google) e,
+  una volta, il modello della voce. La pagina ha una Content Security Policy che non permette altro.
+- **`serve.py`:** accetta richieste solo dalla pagina di Sguardo (controllo di `Host` e `Origin` e
+  intestazione `X-Sguardo`, contro richieste da altri siti e DNS rebinding). Le operazioni che
+  modificano dati (vocali, clonazione, registrazioni) sono permesse solo dal PC stesso. È un server
+  pensato per uso personale, non per essere esposto su internet.
+- Usare la voce di una persona richiede il suo consenso (o quello di chi la rappresenta).
 
 ## Licenze
 
@@ -80,46 +173,53 @@ Usare la voce di una persona richiede il suo consenso (o quello di chi la rappre
 | Codice di Sguardo | da scegliere prima della pubblicazione |
 | MediaPipe Face Landmarker (caricato dal browser) | Apache 2.0 |
 | `data/parole-it.txt` (da FrequencyWords) | CC BY-SA 4.0, vedi `data/LICENSE-parole-it.txt` |
-| coqui-tts (libreria, installata a parte) | MPL-2.0 |
+| coqui-tts (installata a parte) | MPL-2.0 |
 | Modello XTTS-v2 (scaricato a parte) | [Coqui Public Model License](https://coqui.ai/cpml): **solo uso non commerciale** |
 
-Il modello XTTS-v2 non è incluso nel repository: ogni persona che lo usa ne accetta la licenza dalla pagina.
+Il modello XTTS-v2 non è nel repository: chi lo usa ne accetta la licenza dalla pagina.
 
-## Migliorare la precisione con dati reali
+## Sviluppo
 
-Dopo una calibrazione, **Vedi errori** mostra dove si guardava e dove il sistema stimava lo sguardo;
-**Salva dati** scrive la registrazione in `recordings/` (serve `serve.py`). Per misurare l'algoritmo
-su tutte le registrazioni, con lo stesso codice del browser:
+**Migliorare la precisione con dati reali.** Dopo una calibrazione completa, **Vedi errori** mostra
+dove si guardava e dove il sistema stimava lo sguardo; **Salva dati** scrive in `recordings/` la
+calibrazione e l'archivio. **Ultimo risultato** riapre il risultato finché la pagina resta aperta.
 
 ```
-node tools/evaluate.mjs
+node tools/evaluate.mjs          # errore dell'algoritmo su tutte le registrazioni
+node tools/evaluate-drift.mjs    # errore dopo un cambio di postura
+node tools/test-posture.mjs      # controllo della postura e archivio
+node tools/test-predictor.mjs    # suggerimento delle parole
+node tools/test-calibration.mjs  # etichette dei dati raccolti con il punto in movimento
 ```
 
-Ogni modifica a `js/features.js` o `js/regression.js` va confrontata su più registrazioni,
-non su una sola: tra una sessione e l'altra cambiano postura e luce.
-
-## Struttura
+Ogni modifica a `js/features.js`, `js/regression.js` o `js/pool.js` va confrontata su più
+registrazioni, non su una sola: tra una sessione e l'altra cambiano postura e luce.
 
 | File | Cosa fa |
 |---|---|
+| `index.html`, `css/style.css` | Pagina e stile |
+| `js/main.js` | Collega tutto: schermate, calibrazione, voce, impostazioni |
 | `js/tracker.js` | Fotocamera + MediaPipe Face Landmarker |
 | `js/features.js` | Caratteristiche dello sguardo: iride, palpebra, blendshape degli occhi, posa della testa |
-| `js/calibration.js` | Sequenza dei punti di calibrazione e verifica, pulizia dei campioni |
-| `js/regression.js` | Regressione ridge dalle caratteristiche alla posizione sullo schermo |
-| `js/filter.js` | Filtro One Euro per stabilizzare il punto |
-| `js/pool.js` | Archivio delle calibrazioni: il modello si addestra su tutte le sessioni |
+| `js/regression.js` | Regressione ridge (pesata) dalle caratteristiche alla posizione sullo schermo |
+| `js/calibration.js` | Punti di calibrazione e verifica, punto che scivola, pulizia dei campioni |
+| `js/pool.js` | Archivio delle calibrazioni, pesato per somiglianza di postura |
 | `js/posture.js` | Riconosce i cambi di postura rispetto all'ultima calibrazione |
-| `tools/evaluate-drift.mjs` | Errore dopo un cambio di postura, con e senza correzione rapida |
-| `tools/test-posture.mjs` | Prove di postura e archivio sulle registrazioni |
-| `tools/test-calibration.mjs` | Prove delle etichette dei dati raccolti con il punto in movimento |
-| `js/board.js` | Griglia di celle con selezione a fissazione (dwell) |
-| `js/keyboard.js` | Tastiera a due passaggi e frasi rapide |
-| `js/predictor.js` | Suggerimento parole: frequenze italiane + parole e coppie usate dalla persona |
-| `data/parole-it.txt` | 30.000 parole italiane per frequenza (da FrequencyWords, licenza CC BY-SA 4.0) |
-| `tools/test-predictor.mjs` | Prove del suggerimento parole (`node tools/test-predictor.mjs`) |
-| `js/main.js` | Collega tutto: schermate, voce, impostazioni |
+| `js/filter.js` | Filtro One Euro per stabilizzare il punto |
+| `js/board.js` | Griglia di celle con selezione a fissazione |
+| `js/keyboard.js` | Tastiera a due passaggi, frasi rapide e personali |
+| `js/predictor.js` | Suggerimento parole: frequenze italiane + parole usate dalla persona |
+| `js/dasher.js` | Scrittura continua |
+| `js/voice.js` | Voce clonata nella pagina (richieste a `serve.py`, memoria delle frasi) |
+| `serve.py` | Server locale: file, voce, registrazioni; `--https` per il telefono |
+| `voice.py` | Clonazione e generazione della voce con XTTS-v2 |
+| `data/parole-it.txt` | 30.000 parole italiane per frequenza |
+| `tools/` | Valutazioni e prove (Node.js) |
 
 ## Prossimi passi
 
-- Suggerimento della parola successiva anche senza storico personale (oggi a metà frase propone solo parole frequenti)
-- Server Python per la voce clonata
+- Suggerimento della parola successiva anche senza storico personale (oggi a metà frase propone
+  solo parole frequenti).
+- Variante leggera della voce (VITS italiano + OpenVoice, licenze libere, 2–3 volte più veloce)
+  per i PC più lenti.
+- Possibilità di usare Sguardo senza connessione a internet (MediaPipe e modello del viso in locale).

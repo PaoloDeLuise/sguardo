@@ -32,6 +32,8 @@ MAX_RECORDING_BYTES = 50 * 1024 * 1024
 MAX_UPLOAD_BYTES = 30 * 1024 * 1024
 MAX_TTS_CHARS = 400
 PRIVATE_DIRS = {"voce", "recordings", "tools"}
+# Operazioni che cambiano dati sul PC: solo da questo PC, mai dalla rete locale.
+LOCAL_ONLY = {"/api/recording", "/api/voice/sample", "/api/voice/clone", "/api/voice/license", "/api/voice/reset"}
 
 voice = VoiceEngine()
 
@@ -48,11 +50,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Permissions-Policy", "camera=(self), microphone=(self), geolocation=()")
+        self.send_header("X-Frame-Options", "DENY")
         super().end_headers()
 
     def do_GET(self):
         if self.path == "/api/voice":
-            self.send_json(voice.status())
+            if self.check_api():
+                self.send_json({**voice.status(), "local": self.is_local()})
         elif self.is_private():
             self.send_error(404)
         else:
@@ -74,8 +81,36 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return True
         return bool(parts) and (parts[0].lower() in PRIVATE_DIRS or parts[0].startswith("."))
 
+    def is_local(self):
+        return ipaddress.ip_address(self.client_address[0]).is_loopback
+
+    # Le API rispondono solo alla pagina di Sguardo:
+    # - Host atteso: blocca il "DNS rebinding" (un sito che si fa risolvere in 127.0.0.1);
+    # - Origin, se c'è, uguale al server: blocca le richieste partite da altri siti (CSRF);
+    # - intestazione X-Sguardo sulle richieste che cambiano qualcosa: un altro sito non può
+    #   aggiungerla senza un permesso (CORS) che questo server non concede mai;
+    # - le operazioni che modificano dati sul PC solo da questo PC.
+    def check_api(self, path=None):
+        host = (self.headers.get("Host") or "").lower()
+        hostname = urllib.parse.urlsplit(f"//{host}").hostname or ""
+        origin = self.headers.get("Origin")
+        if hostname not in self.server.allowed_hosts:
+            reason = "Host non consentito."
+        elif origin and urllib.parse.urlsplit(origin).netloc.lower() != host:
+            reason = "Richiesta da un altro sito."
+        elif self.command == "POST" and self.headers.get("X-Sguardo") != "1":
+            reason = "Richiesta non valida."
+        elif path in LOCAL_ONLY and not self.is_local():
+            reason = "Si può fare solo dal PC su cui gira Sguardo."
+        else:
+            return True
+        self.send_json({"error": reason}, 403)
+        return False
+
     def do_POST(self):
         url = urllib.parse.urlparse(self.path)
+        if not self.check_api(url.path):
+            return
         try:
             if url.path == "/api/recording":
                 self.save_recording()
@@ -138,6 +173,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 class Server(http.server.ThreadingHTTPServer):
+    allowed_hosts = {"localhost", "127.0.0.1", "::1"}
+
     # Il browser chiude le richieste in corso quando la pagina viene ricaricata: non è un errore.
     def handle_error(self, request, client_address):
         if isinstance(sys.exc_info()[1], (ConnectionAbortedError, ConnectionResetError, BrokenPipeError)):
@@ -203,12 +240,14 @@ def main():
         ip = lan_ip()
         port = args.port or 8443
         server = Server(("0.0.0.0", port), handler)
+        server.allowed_hosts = Server.allowed_hosts | {ip}
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.load_cert_chain(*make_cert(ip))
         server.socket = ctx.wrap_socket(server.socket, server_side=True)
         print(f"Apri dal telefono:  https://{ip}:{port}")
         print(f"Oppure da qui:      https://localhost:{port}")
         print("Il certificato è autofirmato: accetta l'avviso del browser.")
+        print("Dalla rete locale la voce clonata si può usare ma non modificare (vocali, clonazione: solo da questo PC).")
     else:
         port = args.port or 8000
         server = Server(("127.0.0.1", port), handler)
