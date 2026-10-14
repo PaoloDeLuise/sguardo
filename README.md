@@ -226,6 +226,9 @@ registrazioni, non su una sola: tra una sessione e l'altra cambiano postura e lu
 
 - Suggerimento della parola successiva anche senza storico personale (oggi a metà frase propone
   solo parole frequenti).
-- Variante leggera della voce (VITS italiano + OpenVoice, licenze libere, 2–3 volte più veloce)
-  per i PC più lenti.
+- Una voce più veloce per i PC lenti (la voce clonata usa XTTS-v2, licenza non commerciale).
 - Possibilità di usare Sguardo senza connessione a internet (MediaPipe e modello del viso in locale).
+
+Segnalazioni e proposte sono benvenute nelle
+[Issue del repository](https://github.com/PaoloDeLuise/sguardo/issues), soprattutto da chi usa
+Sguardo ogni giorno o assiste chi lo usa.
