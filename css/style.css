@@ -57,6 +57,8 @@ button.big.secondary { background: var(--cell); color: var(--text); }
 .lead { font-size: 1.3rem; color: var(--muted); margin: 0; }
 .tips { text-align: left; max-width: 34rem; line-height: 1.6; color: var(--muted); }
 .status { min-height: 1.5em; color: var(--muted); }
+.source-link { margin: 0; font-size: 0.85rem; color: var(--muted); }
+.source-link a { color: var(--muted); }
 .status.error { color: var(--bad); }
 /* Voce clonata, nella schermata iniziale */
 .voice-card {

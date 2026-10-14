@@ -170,13 +170,19 @@ lenti i tempi crescono in proporzione. Per non far aspettare la persona:
 
 | Componente | Licenza |
 |---|---|
-| Codice di Sguardo | da scegliere prima della pubblicazione |
+| Codice di Sguardo | [GNU AGPL-3.0](LICENSE) |
 | MediaPipe Face Landmarker (caricato dal browser) | Apache 2.0 |
 | `data/parole-it.txt` (da FrequencyWords) | CC BY-SA 4.0, vedi `data/LICENSE-parole-it.txt` |
 | coqui-tts (installata a parte) | MPL-2.0 |
 | Modello XTTS-v2 (scaricato a parte) | [Coqui Public Model License](https://coqui.ai/cpml): **solo uso non commerciale** |
 
 Il modello XTTS-v2 non è nel repository: chi lo usa ne accetta la licenza dalla pagina.
+
+Copyright (C) 2026 Paolo De Luise. Sguardo è software libero: puoi ridistribuirlo e modificarlo
+secondo i termini della GNU Affero General Public License versione 3. In breve: chi distribuisce
+una versione modificata, o la offre come servizio online, deve renderne disponibile il codice
+sorgente con la stessa licenza. La licenza riguarda il codice di Sguardo; i componenti elencati
+sopra mantengono le loro (in particolare la voce XTTS-v2 resta solo per uso non commerciale).
 
 ## Sviluppo
 
