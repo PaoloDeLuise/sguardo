@@ -182,6 +182,7 @@ button:disabled { opacity: 0.5; cursor: default; }
   pointer-events: none;
 }
 .cell .label { position: relative; white-space: pre-line; }
+.cell .hint { position: absolute; bottom: 8px; left: 0; right: 0; font-size: 0.4em; font-weight: 400; color: var(--muted); }
 .cell.hover { background: var(--cell-hover); border-color: var(--accent); }
 .cell.empty { background: transparent; }
 .cell.group .label { white-space: pre-line; letter-spacing: 0.08em; line-height: 1.3; }

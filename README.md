@@ -34,6 +34,8 @@ si fa con gli occhi:
    I battiti di ciglia normali non interrompono la fissazione.
 3. Si scrive con la tastiera a due passaggi: si fissa un gruppo di lettere (default 1 s), poi la lettera.
    La prima riga propone tre parole; **Parla** legge la frase e la cancella; **Frasi** apre le frasi rapide.
+   **Cancella** toglie una lettera; continuando a guardarla toglie una parola intera ogni 1,5 s.
+   I numeri sono in "Z J K W X Y / . , ? 123" → **123**.
    I suggerimenti imparano dalle frasi pronunciate (salvate solo in questo browser).
 
 Per provare la tastiera senza fotocamera: `http://localhost:8000/?mouse` (il mouse fa le veci dello sguardo).

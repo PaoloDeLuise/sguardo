@@ -12,8 +12,14 @@ const GROUPS = [
   { label: "F G H I L", keys: ["F", "G", "H", "I", "Ì", "L"] },
   { label: "M N O P Q", keys: ["M", "N", "O", "Ò", "P", "Q"] },
   { label: "R S T U V", keys: ["R", "S", "T", "U", "Ù", "V"] },
-  { label: "Z J K W X Y\n. , ? ! '", keys: ["Z", "J", "K", "W", "X", "Y", ".", ",", "?", "!", "'"] },
+  // Lettere rare e punteggiatura; da qui "123" apre i numeri.
+  { label: "Z J K W X Y\n. , ? 123", keys: ["Z", "J", "K", "W", "X", "Y", "'", ".", ",", "?"], more: true },
 ];
+const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "!"];
+const MORE_INDEX = 10;
+
+// Cancella: una lettera; continuando a guardare, una parola intera ogni 1,5 s.
+const DELETE_HOLD = { key: "cancella", repeatMs: 1500 };
 
 // Frasi rapide per i bisogni. Sì e No negli angoli in alto: sono le posizioni più facili da raggiungere.
 export const PHRASES = [
@@ -74,7 +80,8 @@ export class Keyboard {
       group(GROUPS[0]), group(GROUPS[1]), group(GROUPS[2]), group(GROUPS[3]),
       group(GROUPS[4]),
       { label: "Spazio", kind: "cmd", action: () => this.space() },
-      { label: "Cancella", kind: "cmd", action: () => this.backspace() },
+      { label: "Cancella", hint: "continua a guardare: parole intere", kind: "cmd", hold: DELETE_HOLD,
+        action: (count = 1) => (count <= 1 ? this.backspace() : this.deleteWord()) },
       { label: "Frasi", kind: "cmd", action: () => this.showPhrases() },
     ]);
     this.onChange(this.text);
@@ -82,6 +89,13 @@ export class Keyboard {
 
   showGroup(g) {
     const items = g.keys.map((k) => ({ label: k, kind: "letter", action: () => this.type(k) }));
+    if (g.more) items[MORE_INDEX] = { label: "123 ▸", kind: "cmd", action: () => this.showDigits() };
+    items[BACK_INDEX] = { label: "Indietro", kind: "cmd", action: () => this.showMain() };
+    this.board.setLayout(COLS, ROWS, items);
+  }
+
+  showDigits() {
+    const items = DIGITS.map((k) => ({ label: k, kind: "letter", action: () => this.type(k) }));
     items[BACK_INDEX] = { label: "Indietro", kind: "cmd", action: () => this.showMain() };
     this.board.setLayout(COLS, ROWS, items);
   }
@@ -147,6 +161,12 @@ export class Keyboard {
 
   backspace() {
     this.text = this.text.slice(0, -1);
+    this.showMain();
+  }
+
+  // L'ultima parola (con gli spazi dopo), oppure la punteggiatura finale.
+  deleteWord() {
+    this.text = this.text.replace(/\s+$/, "").replace(/(\S+|[.,?!])$/, "");
     this.showMain();
   }
 

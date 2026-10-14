@@ -5,7 +5,9 @@ const HYSTERESIS = 0.1; // la cella corrente "trattiene" lo sguardo per il 10% o
 const COOLDOWN_MS = 1200;
 
 export class DwellBoard {
-  // onSelect(item) riceve l'elemento della cella scelta.
+  // onSelect(item, count) riceve l'elemento della cella scelta. count conta le ripetizioni
+  // delle celle "da tenere" (item.hold = { key, repeatMs }): continuando a guardarle l'azione
+  // si ripete ogni repeatMs, con count = 2, 3, ... (per esempio: lettera, poi parole intere).
   constructor(container, onSelect) {
     this.container = container;
     this.onSelect = onSelect;
@@ -14,6 +16,7 @@ export class DwellBoard {
     this.current = null;
     this.since = 0;
     this.cooldownUntil = 0;
+    this.holding = null; // { key, index, count } mentre si tiene lo sguardo su una cella "da tenere"
   }
 
   // items: array di { label, kind, ... } o null per le celle vuote, riga per riga.
@@ -31,8 +34,14 @@ export class DwellBoard {
       if (item) {
         el.innerHTML = `<div class="fill"></div><div class="label"></div>`;
         el.querySelector(".label").textContent = item.label;
+        if (item.hint) {
+          const hint = document.createElement("div");
+          hint.className = "hint";
+          hint.textContent = item.hint;
+          el.appendChild(hint);
+        }
         el.item = item;
-        el.addEventListener("click", () => this.onSelect(item)); // per chi assiste, con mouse o dito
+        el.addEventListener("click", () => this.onSelect(item, 1)); // per chi assiste, con mouse o dito
         this.cells.push(el);
       }
       this.container.appendChild(el);
@@ -56,19 +65,37 @@ export class DwellBoard {
       cell?.classList.add("hover");
       this.current = cell;
       this.since = t;
+      if (!this.continuesHold(cell)) this.holding = null;
     }
     if (!cell) return;
 
-    const p = (t - this.since) / this.dwellMs;
+    const holding = this.continuesHold(cell);
+    const p = (t - this.since) / (holding ? cell.item.hold.repeatMs : this.dwellMs);
     this.setProgress(cell, Math.min(p, 1));
-    if (p >= 1) {
-      this.setProgress(cell, 0);
-      cell.classList.remove("hover");
-      this.current = null;
-      this.cooldownUntil = t + COOLDOWN_MS;
-      flash(cell);
-      this.onSelect(cell.item);
+    if (p < 1) return;
+
+    this.setProgress(cell, 0);
+    this.current = null;
+    flash(cell);
+    if (cell.item.hold) {
+      // Nessuna pausa: se lo sguardo resta lì, l'azione si ripete (anche se la griglia è
+      // stata ridisegnata, purché la cella nella stessa posizione sia la stessa).
+      const count = holding ? this.holding.count + 1 : 1;
+      this.holding = { key: cell.item.hold.key, index: this.indexOf(cell), count };
+      this.onSelect(cell.item, count);
+      return;
     }
+    cell.classList.remove("hover");
+    this.cooldownUntil = t + COOLDOWN_MS;
+    this.onSelect(cell.item, 1);
+  }
+
+  continuesHold(cell) {
+    return Boolean(cell && this.holding && cell.item.hold?.key === this.holding.key && this.indexOf(cell) === this.holding.index);
+  }
+
+  indexOf(cell) {
+    return [...this.container.children].indexOf(cell);
   }
 
   hit({ x, y }) {

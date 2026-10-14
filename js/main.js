@@ -31,7 +31,7 @@ const dot = $("#gaze-dot");
 
 const tracker = new GazeTracker(video);
 const calibrator = new Calibrator($("#calib"), $("#calib-target"), $("#calib-msg"));
-const select = (item) => item.action();
+const select = (item, count) => item.action(count);
 const board = new DwellBoard($("#board"), select);
 const resultBoard = new DwellBoard($("#result-cells"), select);
 const promptBoard = new DwellBoard($("#prompt-cells"), select);
