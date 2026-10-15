@@ -121,8 +121,9 @@ con gli occhi.
 3. **Frasi.** Dieci frasi per i bisogni (Sì, No, Aiuto, Acqua, Dolore...). In **Le mie frasi** si
    salva l'ultima frase detta (**Salva**) e si tolgono quelle non più utili.
 4. **Menu: occhi chiusi per 2 secondi.** Ricalibrare, tempo di fissazione, punto visibile,
-   **scrittura continua** (le lettere scorrono da destra, grandi quanto sono probabili: si guarda a
-   destra per avanzare, a sinistra per tornare indietro).
+   **scrittura continua**: le lettere arrivano dall'alto, affiancate e grandi quanto sono probabili;
+   si guarda in alto, verso la lettera voluta, per avanzare e in basso per tornare indietro (e
+   cancellare). Dal menu si può passare alla versione verticale (lettere da destra).
 5. **Cambio di postura.** Se la testa resta spostata o inclinata per più di 3 secondi compare un
    avviso e dopo 5 secondi parte la ricalibrazione rapida. **Non ora** la rimanda di 3 minuti.
 
@@ -196,6 +197,7 @@ node tools/evaluate-drift.mjs    # errore dopo un cambio di postura
 node tools/test-posture.mjs      # controllo della postura e archivio
 node tools/test-predictor.mjs    # suggerimento delle parole
 node tools/test-calibration.mjs  # etichette dei dati raccolti con il punto in movimento
+node tools/simulate-dasher.mjs   # scrittura continua con uno sguardo simulato (errore ~100 px)
 ```
 
 Ogni modifica a `js/features.js`, `js/regression.js` o `js/pool.js` va confrontata su più
