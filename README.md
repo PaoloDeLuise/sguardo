@@ -100,8 +100,13 @@ La fotocamera nel browser funziona solo da `localhost` o in **HTTPS**. Tre modi:
 3. **Tunnel HTTPS** (per esempio `cloudflared tunnel --url http://localhost:8000`): funziona da
    qualunque rete, ma rende la pagina raggiungibile da internet finché il tunnel è aperto.
 
-Il telefono va fissato su un supporto, all'altezza degli occhi. Su uno schermo piccolo conviene
-tenerlo in orizzontale.
+Il telefono va fissato su un supporto, all'altezza degli occhi, e non va tenuto in mano: ogni
+spostamento del telefono cambia la stima come uno spostamento della testa. Verticale e
+orizzontale hanno calibrazioni separate: girando il telefono parte da sola la ricalibrazione
+(completa la prima volta, rapida le successive). Anche quando la finestra cambia dimensione
+(la barra degli indirizzi che compare, lo schermo intero che si chiude) Sguardo propone di
+ricalibrare. Accanto alla miniatura della fotocamera si vedono i fotogrammi al secondo: sotto
+15 circa lo sguardo trema di più.
 
 ## Uso
 

@@ -105,10 +105,17 @@ function activeBoard() {
   return { board, result: resultBoard, prompt: promptBoard }[mode] ?? null;
 }
 
+// Fotogrammi al secondo elaborati: su un telefono possono essere pochi, e con pochi
+// fotogrammi lo sguardo stimato trema di più.
+const frameTimes = [];
+
 function updateFaceStatus(f) {
+  frameTimes.push(f.t);
+  while (frameTimes.length && frameTimes[0] < f.t - 1000) frameTimes.shift();
   video.classList.toggle("face", f.face && !f.blink);
   video.classList.toggle("blink", f.face && f.blink);
-  $("#face-status").textContent = !f.face ? "no volto" : f.blink ? "occhi chiusi" : "ok";
+  const state = !f.face ? "no volto" : f.blink ? "occhi chiusi" : "ok";
+  $("#face-status").textContent = `${state} · ${frameTimes.length} fps`;
 }
 
 function renderDot() {
@@ -140,6 +147,54 @@ function watchPosture(f) {
   if (posture.update(f.pose, f.t) && now - lastRecalAt > RECAL_MIN_INTERVAL_MS && now > snoozeUntil) {
     promptRecalibration();
   }
+}
+
+// ---------- orientamento e dimensioni della finestra ----------
+
+// La calibrazione vale per una forma della finestra. Girando il telefono destra e sinistra
+// diventano alto e basso: ogni orientamento ha il suo archivio di calibrazioni (sul telefono
+// cambiano le dimensioni di schermo e video). Se invece la finestra cambia di poco (la barra
+// degli indirizzi che compare, lo schermo intero che si chiude) basta ricalibrare.
+const RESIZE_TOLERANCE = 0.03;
+let calibratedSize = null; // { w, h } della finestra durante l'ultima calibrazione
+let resizeTimer = null;
+
+function deviceKey() {
+  return `${screen.width}x${screen.height}@${video.videoWidth}x${video.videoHeight}`;
+}
+
+function openPool() {
+  const device = deviceKey();
+  const key = `${POOL_KEY}:${device}`;
+  // Le versioni precedenti salvavano un solo archivio sotto POOL_KEY.
+  const legacy = load(POOL_KEY);
+  pool = new CalibrationPool(
+    { load: () => load(key) ?? (legacy?.device === device ? legacy : undefined), save: (data) => save(key, data) },
+    device,
+  );
+  model = pool.train();
+  posture.setBaseline(pool.lastPose);
+}
+
+addEventListener("resize", () => {
+  if (mode === "dasher") dasher?.resize();
+  clearTimeout(resizeTimer);
+  // Dopo una rotazione anche il video della fotocamera si gira, con un po' di ritardo.
+  resizeTimer = setTimeout(checkWindowShape, 800);
+});
+
+function checkWindowShape() {
+  if (!pool || MOUSE_MODE || !["board", "dasher", "result", "prompt"].includes(mode)) return;
+  if (deviceKey() !== pool.device) {
+    openPool();
+    toast("Schermo girato: ricalibro per questo orientamento");
+    calibrate(model ? "quick" : "full");
+    return;
+  }
+  if (!calibratedSize || !model) return;
+  const dw = Math.abs(innerWidth - calibratedSize.w) / calibratedSize.w;
+  const dh = Math.abs(innerHeight - calibratedSize.h) / calibratedSize.h;
+  if ((dw > RESIZE_TOLERANCE || dh > RESIZE_TOLERANCE) && mode !== "prompt") promptRecalibration();
 }
 
 // ---------- schermate ----------
@@ -205,12 +260,7 @@ $("#btn-start").addEventListener("click", async () => {
     tracker.start();
     keepScreenOn();
 
-    pool = new CalibrationPool(
-      { load: () => load(POOL_KEY), save: (data) => save(POOL_KEY, data) },
-      `${screen.width}x${screen.height}@${video.videoWidth}x${video.videoHeight}`,
-    );
-    model = pool.train();
-    posture.setBaseline(pool.lastPose);
+    openPool();
     // Con calibrazioni già salvate bastano 10 secondi per adattarsi alla postura di oggi.
     calibrate(model ? "quick" : "full");
   } catch (e) {
@@ -400,6 +450,7 @@ async function calibrate(kind = "full") {
     }
 
     pool.add(kind, [...points, ...validation.map(({ point, samples }) => ({ point, samples: usable(samples) }))], pose);
+    calibratedSize = { w: innerWidth, h: innerHeight };
     model = pool.train();
     posture.setBaseline(pose);
     lastRecalAt = performance.now();
@@ -810,6 +861,10 @@ $("#btn-last-result").addEventListener("click", () => {
 });
 $("#btn-reset").addEventListener("click", () => {
   if (!pool || !confirm("Cancellare tutte le calibrazioni salvate? Serve quando cambia la persona che usa Sguardo.")) return;
+  // Tutti gli archivi: uno per orientamento, più quello del formato precedente.
+  try {
+    for (const k of Object.keys(localStorage)) if (k === POOL_KEY || k.startsWith(`${POOL_KEY}:`)) localStorage.removeItem(k);
+  } catch { /* storage non disponibile */ }
   pool.clear();
   model = null;
   calibrate("full");
@@ -832,7 +887,6 @@ addEventListener("keydown", (e) => {
 applySettings();
 
 // La scrittura continua disegna su un canvas: va ridimensionato con la finestra.
-addEventListener("resize", () => { if (mode === "dasher") dasher?.resize(); });
 
 // ---------- utilità ----------
 
