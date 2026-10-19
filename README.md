@@ -136,7 +136,10 @@ con gli occhi.
 5. **Cambio di postura.** Se la testa resta spostata o inclinata per più di 3 secondi compare un
    avviso e dopo 5 secondi parte la ricalibrazione rapida. **Non ora** la rimanda di 3 minuti.
 
-I battiti di ciglia normali non interrompono la fissazione.
+I battiti di ciglia normali non interrompono la fissazione, e nemmeno il tremolio dello sguardo:
+ogni cella accumula "prove" quando lo sguardo ci cade vicino e le perde lentamente quando non la
+si guarda, quindi un'uscita breve non fa ripartire da zero. Mentre si guarda si vedono riempirsi
+le celle candidate; quella in vantaggio è evidenziata.
 
 **Per chi assiste:**
 
@@ -207,6 +210,7 @@ node tools/test-posture.mjs      # controllo della postura e archivio
 node tools/test-predictor.mjs    # suggerimento delle parole
 node tools/test-calibration.mjs  # etichette dei dati raccolti con il punto in movimento
 node tools/simulate-dasher.mjs   # scrittura continua con uno sguardo simulato (errore ~100 px)
+node tools/simulate-dwell.mjs    # selezione delle celle con uno sguardo simulato, PC e telefono
 ```
 
 Ogni modifica a `js/features.js`, `js/regression.js` o `js/pool.js` va confrontata su più
@@ -224,6 +228,7 @@ registrazioni, non su una sola: tra una sessione e l'altra cambiano postura e lu
 | `js/posture.js` | Riconosce i cambi di postura rispetto all'ultima calibrazione |
 | `js/filter.js` | Filtro One Euro per stabilizzare il punto |
 | `js/board.js` | Griglia di celle con selezione a fissazione |
+| `js/dwell.js` | Scelta della cella: accumulo di prove dallo sguardo (anche nel simulatore) |
 | `js/keyboard.js` | Tastiera a due passaggi, frasi rapide e personali |
 | `js/predictor.js` | Suggerimento parole: frequenze italiane + parole usate dalla persona |
 | `js/dasher.js` | Scrittura continua |

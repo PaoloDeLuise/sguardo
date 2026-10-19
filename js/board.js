@@ -1,7 +1,13 @@
-// Tabellone a celle grandi: si seleziona una cella fissandola per un tempo (dwell).
+// Tabellone a celle grandi: si seleziona una cella guardandola per un tempo (dwell).
 // Il contenuto cambia con setLayout() (gruppi di lettere, lettere, frasi...).
+//
+// La scelta della cella è in dwell.js: ogni cella accumula "prove" quando lo sguardo ci cade
+// vicino e le perde lentamente quando non la si guarda, quindi il tremolio dello sguardo non fa
+// ripartire da zero. Simulato (tools/simulate-dwell.mjs): sul telefono la cella giusta passa dal
+// 51% al 75% dei tentativi e quelli senza selezione dal 33% al 4%; sul PC dal 97% al 99%.
 
-const HYSTERESIS = 0.1; // la cella corrente "trattiene" lo sguardo per il 10% oltre il bordo
+import { DwellSelector } from "./dwell.js";
+
 const COOLDOWN_MS = 1200;
 
 export class DwellBoard {
@@ -13,8 +19,8 @@ export class DwellBoard {
     this.onSelect = onSelect;
     this.dwellMs = 1000;
     this.cells = [];
-    this.current = null;
-    this.since = 0;
+    this.selector = new DwellSelector({ method: "accumulate", normalize: true, sigmaPx: 60, decay: 0.5 });
+    this.leader = null;
     this.cooldownUntil = 0;
     this.holding = null; // { key, index, count } mentre si tiene lo sguardo su una cella "da tenere"
   }
@@ -57,44 +63,51 @@ export class DwellBoard {
     }
   }
 
+  // Dopo una rotazione dello schermo: stessa griglia, ridisposta.
+  relayout() {
+    if (this.layout) this.setLayout(...this.layout);
+  }
+
   // gaze: {x, y} in pixel della finestra, oppure null se lo sguardo non è disponibile.
   // paused: occhi chiusi. Un battito di ciglia non deve azzerare la fissazione,
   // ma nemmeno farla avanzare.
   update(gaze, t, paused = false) {
     const dt = t - (this.lastT ?? t);
     this.lastT = t;
-    if (paused) {
-      this.since += dt;
-      return;
-    }
-    const cell = gaze && t >= this.cooldownUntil ? this.hit(gaze) : null;
-    if (cell !== this.current) {
-      this.setProgress(this.current, 0);
-      this.current?.classList.remove("hover");
-      cell?.classList.add("hover");
-      this.current = cell;
-      this.since = t;
-      if (!this.continuesHold(cell)) this.holding = null;
-    }
-    if (!cell) return;
+    if (paused || dt <= 0 || !this.cells.length) return;
+    if (t < this.cooldownUntil) return; // subito dopo una selezione lo sguardo si sta spostando
 
-    const holding = this.continuesHold(cell);
-    const p = (t - this.since) / (holding ? cell.item.hold.repeatMs : this.dwellMs);
-    this.setProgress(cell, Math.min(p, 1));
-    if (p < 1) return;
+    const rects = this.cells.map((c) => c.getBoundingClientRect());
+    const need = (i) => (this.continuesHold(this.cells[i]) ? this.cells[i].item.hold.repeatMs : this.dwellMs);
+    const { progress, leader, selected } = this.selector.update(rects, gaze, dt, need);
 
-    this.setProgress(cell, 0);
-    this.current = null;
+    // Si riempiono tutte le celle che stanno accumulando; quella in vantaggio è evidenziata.
+    this.cells.forEach((c, i) => this.setProgress(c, progress[i]));
+    if (leader !== this.leader) {
+      this.cells[this.leader]?.classList.remove("hover");
+      this.cells[leader]?.classList.add("hover");
+      this.leader = leader;
+    }
+    // Lo sguardo si è spostato su un'altra cella (o non c'è più): la ripetizione di "Cancella"
+    // si interrompe. Subito dopo una ripetizione la griglia è ridisegnata e per un attimo nessuna
+    // cella è in vantaggio: quello non interrompe.
+    if (this.holding && (!gaze || (leader !== null && !this.continuesHold(this.cells[leader])))) this.holding = null;
+    if (selected === null) return;
+
+    const cell = this.cells[selected];
     flash(cell);
+    this.selector.reset();
+    this.cells.forEach((c) => this.setProgress(c, 0));
     if (cell.item.hold) {
       // Nessuna pausa: se lo sguardo resta lì, l'azione si ripete (anche se la griglia è
       // stata ridisegnata, purché la cella nella stessa posizione sia la stessa).
-      const count = holding ? this.holding.count + 1 : 1;
+      const count = this.continuesHold(cell) ? this.holding.count + 1 : 1;
       this.holding = { key: cell.item.hold.key, index: this.indexOf(cell), count };
       this.onSelect(cell.item, count);
       return;
     }
     cell.classList.remove("hover");
+    this.leader = null;
     this.cooldownUntil = t + COOLDOWN_MS;
     this.onSelect(cell.item, 1);
   }
@@ -107,24 +120,17 @@ export class DwellBoard {
     return [...this.container.children].indexOf(cell);
   }
 
-  hit({ x, y }) {
-    if (this.current && inside(this.current.getBoundingClientRect(), x, y, HYSTERESIS)) return this.current;
-    return this.cells.find((c) => inside(c.getBoundingClientRect(), x, y, 0)) ?? null;
-  }
-
-  // Dopo una rotazione dello schermo: stessa griglia, ridisposta.
-  relayout() {
-    if (this.layout) this.setLayout(...this.layout);
-  }
-
   setProgress(cell, p) {
     cell?.style.setProperty("--p", p);
   }
 
   reset() {
-    this.setProgress(this.current, 0);
-    this.current?.classList.remove("hover");
-    this.current = null;
+    this.selector.reset();
+    for (const c of this.cells) {
+      this.setProgress(c, 0);
+      c.classList.remove("hover");
+    }
+    this.leader = null;
   }
 }
 
@@ -132,9 +138,4 @@ function flash(cell) {
   cell.classList.remove("selected");
   void cell.offsetWidth; // riavvia l'animazione
   cell.classList.add("selected");
-}
-
-function inside(r, x, y, margin) {
-  const mx = r.width * margin, my = r.height * margin;
-  return x >= r.left - mx && x <= r.right + mx && y >= r.top - my && y <= r.bottom + my;
 }
