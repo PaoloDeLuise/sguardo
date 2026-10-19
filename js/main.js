@@ -43,7 +43,17 @@ const filterY = new OneEuro();
 // dasherLayout: "auto" mette le lettere sul lato lungo dello schermo (orizzontale su PC e telefono
 // girato, verticale su telefono in verticale): nel simulatore (tools/simulate-dasher.mjs) lettere
 // più grandi danno il 92% di frasi completate contro il 62%, con il 75% di cancellazioni in meno.
-const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", ...load(SETTINGS_KEY) };
+const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", background: "auto", ...load(SETTINGS_KEY) };
+
+// Sfondo: chiaro sul telefono (lo schermo vicino al viso lo illumina, la fotocamera amplifica
+// meno e i punti del viso sono meno rumorosi), scuro sul PC. Non si sceglie misurando la luce
+// sul viso: la fotocamera regola da sola l'esposizione e l'immagine sembra sempre illuminata.
+const BACKGROUNDS = { auto: "automatico", light: "chiaro", dark: "scuro" };
+
+function lightBackground() {
+  if (settings.background !== "auto") return settings.background === "light";
+  return matchMedia("(pointer: coarse)").matches;
+}
 const DASHER_LAYOUTS = { auto: "automatica", horizontal: "orizzontale", vertical: "verticale" };
 
 function dasherOrientation() {
@@ -376,6 +386,19 @@ function showMenu() {
         showMenu();
       },
     },
+    {
+      label: `Sfondo:\n${BACKGROUNDS[settings.background]}`,
+      kind: "cmd",
+      action: () => {
+        const order = Object.keys(BACKGROUNDS);
+        const wasLight = lightBackground();
+        settings.background = order[(order.indexOf(settings.background) + 1) % order.length];
+        applySettings();
+        showMenu();
+        // La luce sul viso è cambiata: la calibrazione fatta con l'altro sfondo vale meno.
+        if (lightBackground() !== wasLight && model) toast("Sfondo cambiato: conviene ricalibrare (Ricalibra 10 secondi)", 5000);
+      },
+    },
   ];
   items[11] = { label: "Indietro", kind: "cmd", action: () => keyboard.showMain() };
   board.setLayout(4, 3, items);
@@ -395,6 +418,7 @@ function startDasher() {
   dasher.model = new LetterModel(predictor.words, predictor.user.uni); // include le parole imparate
   dasher.speed = settings.dasherSpeed;
   dasher.orientation = dasherOrientation();
+  dasher.light = lightBackground();
   dasher.start();
 }
 
@@ -898,6 +922,8 @@ function applySettings() {
   board.dwellMs = resultBoard.dwellMs = promptBoard.dwellMs = settings.dwellMs;
   $("#dwell-value").textContent = `${(settings.dwellMs / 1000).toFixed(2).replace(/0$/, "")} s`;
   $("#btn-dot").textContent = `Punto: ${settings.showDot ? "sì" : "no"}`;
+  document.body.classList.toggle("light", lightBackground());
+  if (dasher) dasher.light = lightBackground();
   save(SETTINGS_KEY, settings);
   renderDot();
 }

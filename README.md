@@ -103,6 +103,9 @@ La fotocamera nel browser funziona solo da `localhost` o in **HTTPS**. Tre modi:
 Sugli schermi piccoli la barra per chi assiste si nasconde (si riapre con ⚙), in verticale la
 griglia diventa 3×4 e la scrittura continua mette le lettere sul lato lungo dello schermo.
 Un tablet resta più comodo: celle più grandi rispetto all'errore dello sguardo.
+Sul telefono lo sfondo è chiaro: lo schermo vicino al viso lo illumina, la fotocamera amplifica
+meno il segnale e i punti del viso sono meno rumorosi. Dal menu: **Sfondo automatico / chiaro /
+scuro** (cambiandolo conviene ricalibrare, perché cambia la luce sul viso).
 
 Il telefono va fissato su un supporto, all'altezza degli occhi, e non va tenuto in mano: ogni
 spostamento del telefono cambia la stima come uno spostamento della testa. Verticale e

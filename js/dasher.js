@@ -31,6 +31,18 @@ const BOX_DEPTH = 0.9;
 // al bordo crescevano verso il bordo e uscivano dallo schermo prima di arrivare alla croce.
 export const MOTION = { anchor: 0.5, centerRate: 2.5, edgeBoost: 1 };
 
+// Colori per lo sfondo scuro e per quello chiaro (che illumina il viso, vedi style.css).
+const PALETTES = {
+  dark: {
+    bg: "#0f1115", root: "#171c26", cross: "#ffb300", line: "#0f1115", text: "#f2f4f8", speakText: "#4caf50",
+    space: ["#22322a", "#2a3a2a"], speak: "#1d2b1d", even: ["#1e2a3a", "#243246"], odd: ["#26304a", "#2c3756"],
+  },
+  light: {
+    bg: "#f4f6fa", root: "#e9edf3", cross: "#e65100", line: "#f4f6fa", text: "#11151c", speakText: "#2e7d32",
+    space: ["#d7ecd9", "#c8e4cb"], speak: "#d7ecd9", even: ["#d6e4f2", "#c8daee"], odd: ["#bfd3ea", "#b2c9e4"],
+  },
+};
+
 // Probabilità della lettera successiva, dalle parole del vocabolario pesate per frequenza.
 export class LetterModel {
   // words: ordinate per frequenza; extra: { parola: conteggio } imparate dalla persona.
@@ -108,6 +120,7 @@ export class Dasher {
     this.speed = 1;
     this.orientation = options.orientation ?? "horizontal";
     this.motion = { ...MOTION, ...options.motion };
+    this.palette = PALETTES.dark;
     this.running = false;
   }
 
@@ -143,6 +156,8 @@ export class Dasher {
   }
 
   get horizontal() { return this.orientation === "horizontal"; }
+
+  set light(on) { this.palette = on ? PALETTES.light : PALETTES.dark; }
 
   // S: lunghezza dell'asse su cui sono disposte le lettere; F: lunghezza dell'asse "avanti".
   get axes() {
@@ -255,17 +270,17 @@ export class Dasher {
     const ctx = this.canvas.getContext("2d");
     const { width: W, height: H } = this.rect;
     const { S, F } = this.axes;
-    ctx.fillStyle = "#0f1115";
+    ctx.fillStyle = this.palette.bg;
     ctx.fillRect(0, 0, W, H);
     const a0 = (0 - this.center) * this.scale * S + S / 2;
     const a1 = (1 - this.center) * this.scale * S + S / 2;
     // Riquadro del testo già scritto: contiene le lettere successive (niente vuoti neri).
-    ctx.fillStyle = "#171c26";
+    ctx.fillStyle = this.palette.root;
     ctx.fillRect(...this.screenRect(Math.max(0, a0), Math.min(S, a1), Math.min(F, (a1 - a0) * this.depth)));
     this.drawNode(ctx, this.root, a0, a1, 0);
 
     // Croce: guardare dalla parte da cui arrivano le lettere avanza, dall'altra torna indietro.
-    ctx.strokeStyle = "#ffb300";
+    ctx.strokeStyle = this.palette.cross;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(W / 2 - 18, H / 2); ctx.lineTo(W / 2 + 18, H / 2);
@@ -282,13 +297,13 @@ export class Dasher {
       const size = b - a;
       const d = Math.min(F, size * this.depth);
       const rect = this.screenRect(a, b, d);
-      ctx.fillStyle = boxColor(c.sym, i, level);
+      ctx.fillStyle = boxColor(this.palette, c.sym, i, level);
       ctx.fillRect(...rect);
-      ctx.strokeStyle = "#0f1115";
+      ctx.strokeStyle = this.palette.line;
       ctx.strokeRect(...rect);
       if (size > 14 && d > 14) {
         const font = Math.max(12, Math.min(56, size * 0.45, d * 0.7));
-        ctx.fillStyle = c.sym === SPEAK ? "#4caf50" : "#f2f4f8";
+        ctx.fillStyle = c.sym === SPEAK ? this.palette.speakText : this.palette.text;
         ctx.font = `600 ${font}px system-ui, sans-serif`;
         const label = LABELS[c.sym] ?? c.sym.toUpperCase();
         // La scritta sta sul lato rivolto verso la croce, al centro della parte visibile.
@@ -315,9 +330,8 @@ function applySymbol(text, sym) {
   return text + sym;
 }
 
-function boxColor(sym, i, depth) {
-  if (sym === SPACE) return depth % 2 ? "#2a3a2a" : "#22322a";
-  if (sym === SPEAK) return "#1d2b1d";
-  const shades = depth % 2 ? ["#26304a", "#2c3756"] : ["#1e2a3a", "#243246"];
-  return shades[i % 2];
+function boxColor(palette, sym, i, depth) {
+  if (sym === SPACE) return palette.space[depth % 2];
+  if (sym === SPEAK) return palette.speak;
+  return (depth % 2 ? palette.odd : palette.even)[i % 2];
 }

@@ -10,6 +10,39 @@
   --ok: #4caf50;
   --warn: #ffb300;
   --bad: #ef5350;
+  --border: #3a4152;
+  --on-accent: #0b1a22;
+  --suggest-bg: #1b2733;
+  --cmd-bg: #191c23;
+  --compose-bg: #0a0c10;
+  --compose-border: #262b36;
+  --calib-bg: #000;
+  --calib-dot: #fff;
+}
+
+/* Sfondo chiaro: lo schermo illumina il viso. Utile soprattutto sul telefono, che si usa
+   vicino al viso e spesso con poca luce: con più luce la fotocamera amplifica meno il segnale
+   e i punti del viso (iride, palpebre) sono meno rumorosi. */
+body.light {
+  --bg: #f4f6fa;
+  --panel: #ffffff;
+  --cell: #e2e7ef;
+  --cell-hover: #d0d9e7;
+  --text: #11151c;
+  --muted: #566070;
+  --accent: #0277bd;
+  --fill: rgba(2, 119, 189, 0.22);
+  --ok: #2e7d32;
+  --warn: #b26a00;
+  --bad: #c62828;
+  --border: #b8c1cf;
+  --on-accent: #ffffff;
+  --suggest-bg: #dcebf7;
+  --cmd-bg: #eceff4;
+  --compose-bg: #ffffff;
+  --compose-border: #d4dae4;
+  --calib-bg: #ffffff;
+  --calib-dot: #ffffff;
 }
 
 * { box-sizing: border-box; }
@@ -33,13 +66,13 @@ button {
   font: inherit;
   color: var(--text);
   background: var(--cell);
-  border: 1px solid #3a4152;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 12px;
   cursor: pointer;
 }
 button:hover { background: var(--cell-hover); }
-button.big { font-size: 1.25rem; padding: 14px 28px; background: var(--accent); color: #0b1a22; border: none; font-weight: 600; }
+button.big { font-size: 1.25rem; padding: 14px 28px; background: var(--accent); color: var(--on-accent); border: none; font-weight: 600; }
 button.big.secondary { background: var(--cell); color: var(--text); }
 
 /* Schermate centrate */
@@ -78,11 +111,11 @@ button.big.secondary { background: var(--cell); color: var(--text); }
   font: inherit;
   color: var(--text);
   background: var(--cell);
-  border: 1px solid #3a4152;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 10px;
 }
-.file-button { position: relative; overflow: hidden; background: var(--cell); border: 1px solid #3a4152; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.file-button { position: relative; overflow: hidden; background: var(--cell); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
 .file-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .muted { color: var(--muted); font-size: 0.9rem; }
 .record-panel { margin-top: 12px; padding: 12px; border: 1px solid var(--bad); border-radius: 10px; }
@@ -190,8 +223,8 @@ button:disabled { opacity: 0.5; cursor: default; }
 .cell.empty { background: transparent; }
 .cell.group .label { white-space: pre-line; letter-spacing: 0.08em; line-height: 1.3; }
 .cell.letter { font-size: clamp(2rem, 9vmin, 5rem); }
-.cell.suggest { color: var(--accent); background: #1b2733; }
-.cell.cmd { background: #191c23; color: var(--muted); }
+.cell.suggest { color: var(--accent); background: var(--suggest-bg); }
+.cell.cmd { background: var(--cmd-bg); color: var(--muted); }
 .cell.cmd.speak { color: var(--ok); }
 .cell.cmd.hover { color: var(--text); }
 .cell.cmd.save { color: var(--ok); }
@@ -203,8 +236,8 @@ button:disabled { opacity: 0.5; cursor: default; }
   align-items: center;
   min-height: 72px;
   padding: 8px 20px;
-  background: #0a0c10;
-  border-bottom: 1px solid #262b36;
+  background: var(--compose-bg);
+  border-bottom: 1px solid var(--compose-border);
   font-size: clamp(1.4rem, 4vmin, 2.4rem);
   overflow: hidden;
   white-space: nowrap;
@@ -230,6 +263,8 @@ body.compact .tools-toggle { display: inline-block; margin-left: 8px; }
 .cam-chip.face::before { color: var(--ok); }
 .cam-chip.blink::before { color: var(--warn); }
 body.compact .cam-chip:not(:empty) { display: inline-block; }
+/* senza indicatore (modalità mouse) il pulsante ⚙ resta comunque a destra */
+body.compact .cam-chip:empty + .tools-toggle { margin-left: auto; }
 body.compact:not(.show-tools) #toolbar { display: none !important; }
 body.compact #toolbar { flex-wrap: wrap; min-height: 0; gap: 6px; padding: 4px 8px; }
 body.compact #compose { min-height: 44px; padding: 4px 12px; font-size: 1.3rem; }
@@ -241,14 +276,14 @@ body.compact .cell { border-radius: 10px; }
 #toolbar.mouse .cam, #toolbar.mouse #btn-calib, #toolbar.mouse #btn-last-result { display: none; }
 .cell.selected { animation: flash 0.6s ease-out; }
 @keyframes flash {
-  from { background: var(--accent); color: #0b1a22; }
+  from { background: var(--accent); color: var(--on-accent); }
   to { background: var(--cell); }
 }
 
 #dasher { flex: 1; display: block; width: 100%; min-height: 0; }
 
 /* Calibrazione */
-#calib { position: fixed; inset: 0; background: #000; z-index: 10; }
+#calib { position: fixed; inset: 0; background: var(--calib-bg); z-index: 10; }
 #calib-target {
   position: absolute;
   width: 44px;
@@ -261,7 +296,7 @@ body.compact .cell { border-radius: 10px; }
   justify-content: center;
   transition: transform 0.3s; /* il movimento è animato da calibration.js */
 }
-#calib-target span { width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+#calib-target span { width: 8px; height: 8px; border-radius: 50%; background: var(--calib-dot); }
 #calib-target.collecting { transform: scale(0.5); background: var(--accent); }
 #calib-msg {
   position: absolute;
