@@ -6,7 +6,7 @@
 // ripartire da zero. Simulato (tools/simulate-dwell.mjs): sul telefono la cella giusta passa dal
 // 51% al 75% dei tentativi e quelli senza selezione dal 33% al 4%; sul PC dal 97% al 99%.
 
-import { DwellSelector } from "./dwell.js";
+import { DwellSelector, sigmaForCells } from "./dwell.js";
 
 const COOLDOWN_MS = 1200;
 
@@ -78,6 +78,8 @@ export class DwellBoard {
     if (t < this.cooldownUntil) return; // subito dopo una selezione lo sguardo si sta spostando
 
     const rects = this.cells.map((c) => c.getBoundingClientRect());
+    // Incertezza adatta alla grandezza delle celle: sul telefono la selezione è ~30% più rapida.
+    this.selector.options.sigmaPx = sigmaForCells(rects);
     const need = (i) => (this.continuesHold(this.cells[i]) ? this.cells[i].item.hold.repeatMs : this.dwellMs);
     const { progress, leader, selected } = this.selector.update(rects, gaze, dt, need);
 

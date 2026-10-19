@@ -2,7 +2,7 @@
 // caso con l'errore tipico di una webcam (uno spostamento di fondo per tentativo più il tremolio
 // di ogni fotogramma). Confronta il metodo attuale ("classic") con l'accumulo di prove.
 //   node tools/simulate-dwell.mjs [tentativi]
-import { DwellSelector } from "../js/dwell.js";
+import { DwellSelector, sigmaForCells } from "../js/dwell.js";
 
 const FPS = 30;
 const DWELL_MS = 1000;
@@ -48,15 +48,11 @@ function trial(selector, rects, target, rnd, noise) {
   return { selected: null, ms: TIMEOUT_MS };
 }
 
+// "adattiva": incertezza calcolata dalla grandezza delle celle, come nella pagina.
 const VARIANTS = [
-  { name: "attuale (margine 10%)", options: { method: "classic" } },
-  { name: "cronometro, margine 25%", options: { method: "classic", hysteresis: 0.25 } },
-  { name: "cronometro, margine 40%", options: { method: "classic", hysteresis: 0.4 } },
-  { name: "accumulo, sigma 60, calo 0.25", options: { method: "accumulate", sigmaPx: 60, decay: 0.25 } },
-  { name: "accumulo normaliz., sigma 40, calo 0.5", options: { method: "accumulate", normalize: true, sigmaPx: 40, decay: 0.5 } },
-  { name: "accumulo normaliz., sigma 60, calo 0.5", options: { method: "accumulate", normalize: true, sigmaPx: 60, decay: 0.5 } },
-  { name: "accumulo normaliz., sigma 60, calo 1", options: { method: "accumulate", normalize: true, sigmaPx: 60, decay: 1 } },
-  { name: "accumulo normaliz., sigma 90, calo 1", options: { method: "accumulate", normalize: true, sigmaPx: 90, decay: 1 } },
+  { name: "cronometro (prima)", options: { method: "classic" } },
+  { name: "accumulo, 60 px fissi", options: { method: "accumulate", normalize: true, sigmaPx: 60, decay: 0.5 } },
+  { name: "accumulo, incertezza adattiva", options: { method: "accumulate", normalize: true, decay: 0.5 }, adaptive: true },
 ];
 
 const TRIALS = Number(process.argv[2] ?? 400);
@@ -67,7 +63,7 @@ for (const noise of [1, 1.5]) {
     for (const v of VARIANTS) {
       let seed = 4242;
       const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-      const sel = new DwellSelector(v.options);
+      const sel = new DwellSelector(v.adaptive ? { ...v.options, sigmaPx: sigmaForCells(rects) } : v.options);
       let ok = 0, wrong = 0, none = 0, ms = 0;
       for (let i = 0; i < TRIALS; i++) {
         const target = Math.floor(rnd() * rects.length);

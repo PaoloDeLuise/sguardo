@@ -49,6 +49,7 @@ button.big.secondary { background: var(--cell); color: var(--text); }
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  justify-content: safe center; /* se non ci sta, parte dall'alto e si scorre (senza tagliare il titolo) */
   gap: 16px;
   padding: 24px 16px;
   text-align: center;
@@ -222,7 +223,13 @@ button:disabled { opacity: 0.5; cursor: default; }
 /* Schermi piccoli (telefono): la barra per chi assiste si nasconde e si riapre con ⚙, la barra
    del testo si abbassa. In orizzontale le celle passano da ~76 a ~120 px di altezza. */
 .tools-toggle { display: none; flex: none; margin-left: 12px; font-size: 1.2rem; padding: 2px 10px; }
-body.compact .tools-toggle { display: inline-block; margin-left: auto; }
+body.compact .tools-toggle { display: inline-block; margin-left: 8px; }
+/* Con la barra nascosta: stato della fotocamera nella barra del testo */
+.cam-chip { display: none; flex: none; margin-left: auto; font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.cam-chip::before { content: "●"; margin-right: 4px; color: var(--bad); }
+.cam-chip.face::before { color: var(--ok); }
+.cam-chip.blink::before { color: var(--warn); }
+body.compact .cam-chip:not(:empty) { display: inline-block; }
 body.compact:not(.show-tools) #toolbar { display: none !important; }
 body.compact #toolbar { flex-wrap: wrap; min-height: 0; gap: 6px; padding: 4px 8px; }
 body.compact #compose { min-height: 44px; padding: 4px 12px; font-size: 1.3rem; }

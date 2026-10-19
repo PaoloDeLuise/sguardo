@@ -123,6 +123,11 @@ function updateFaceStatus(f) {
   video.classList.toggle("blink", f.face && f.blink);
   const state = !f.face ? "no volto" : f.blink ? "occhi chiusi" : "ok";
   $("#face-status").textContent = `${state} · ${frameTimes.length} fps`;
+  // Sul telefono la barra con la miniatura è nascosta: lo stesso stato nella barra del testo.
+  const chip = $("#cam-chip");
+  chip.textContent = `${state} · ${frameTimes.length} fps`;
+  chip.classList.toggle("face", f.face && !f.blink);
+  chip.classList.toggle("blink", f.face && f.blink);
 }
 
 function renderDot() {

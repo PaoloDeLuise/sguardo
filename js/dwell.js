@@ -83,6 +83,15 @@ export class DwellSelector {
   }
 }
 
+// Incertezza dello sguardo adatta alla griglia: il 30% del lato corto di una cella, tra 25 e
+// 60 px. Con un valore fisso di 60 px, sulle celle piccole del telefono (~220x115) lo sguardo
+// "si allargava" sulle celle vicine e ogni cella accumulava più lentamente.
+export function sigmaForCells(rects) {
+  const sides = rects.map((r) => Math.min(r.right - r.left, r.bottom - r.top)).sort((a, b) => a - b);
+  const typical = sides[sides.length >> 1] ?? 200;
+  return Math.max(25, Math.min(60, 0.3 * typical));
+}
+
 function inside(r, { x, y }, margin) {
   const mx = (r.right - r.left) * margin, my = (r.bottom - r.top) * margin;
   return x >= r.left - mx && x <= r.right + mx && y >= r.top - my && y <= r.bottom + my;
