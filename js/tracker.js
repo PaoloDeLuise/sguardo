@@ -34,8 +34,11 @@ export class GazeTracker {
   }
 
   async startCamera() {
+    // Sui telefoni (schermo touch) basta 640x480: a 30–40 cm il viso riempie l'inquadratura e
+    // il telefono elabora più fotogrammi al secondo, quindi lo sguardo stimato trema meno.
+    const phone = matchMedia("(pointer: coarse)").matches;
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: { facingMode: "user", width: { ideal: phone ? 640 : 1280 }, height: { ideal: phone ? 480 : 720 } },
       audio: false,
     });
     this.video.srcObject = stream;

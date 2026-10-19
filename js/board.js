@@ -22,6 +22,15 @@ export class DwellBoard {
   // items: array di { label, kind, ... } o null per le celle vuote, riga per riga.
   // kind: "letter" | "group" | "suggest" | "cmd" | "phrase" (solo per lo stile).
   setLayout(cols, rows, items) {
+    this.layout = [cols, rows, items];
+    // Schermo più alto che largo (telefono in verticale): la griglia si traspone, 4x3 diventa
+    // 3x4. Gli angoli restano angoli (Sì e No, "Indietro" in basso a destra) e le celle non
+    // diventano strisce strette.
+    if (innerHeight > innerWidth && cols > rows) {
+      const t = [];
+      items.forEach((item, i) => { t[(i % cols) * rows + Math.floor(i / cols)] = item; });
+      [cols, rows, items] = [rows, cols, t];
+    }
     this.reset();
     this.container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
     this.container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
@@ -101,6 +110,11 @@ export class DwellBoard {
   hit({ x, y }) {
     if (this.current && inside(this.current.getBoundingClientRect(), x, y, HYSTERESIS)) return this.current;
     return this.cells.find((c) => inside(c.getBoundingClientRect(), x, y, 0)) ?? null;
+  }
+
+  // Dopo una rotazione dello schermo: stessa griglia, ridisposta.
+  relayout() {
+    if (this.layout) this.setLayout(...this.layout);
   }
 
   setProgress(cell, p) {

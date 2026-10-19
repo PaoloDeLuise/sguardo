@@ -40,9 +40,16 @@ const voice = new ClonedVoice();
 const filterX = new OneEuro();
 const filterY = new OneEuro();
 
-// dasherOrientation: nel simulatore (tools/simulate-dasher.mjs) l'orizzontale completa il 92%
-// delle frasi contro il 62% del verticale, con il 75% di cancellazioni in meno.
-const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherOrientation: "horizontal", ...load(SETTINGS_KEY) };
+// dasherLayout: "auto" mette le lettere sul lato lungo dello schermo (orizzontale su PC e telefono
+// girato, verticale su telefono in verticale): nel simulatore (tools/simulate-dasher.mjs) lettere
+// più grandi danno il 92% di frasi completate contro il 62%, con il 75% di cancellazioni in meno.
+const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", ...load(SETTINGS_KEY) };
+const DASHER_LAYOUTS = { auto: "automatica", horizontal: "orizzontale", vertical: "verticale" };
+
+function dasherOrientation() {
+  if (settings.dasherLayout !== "auto") return settings.dasherLayout;
+  return innerWidth >= innerHeight ? "horizontal" : "vertical";
+}
 let keyboard = null;
 let dasher = null;
 let eyesClosed = false;
@@ -159,6 +166,13 @@ const RESIZE_TOLERANCE = 0.03;
 let calibratedSize = null; // { w, h } della finestra durante l'ultima calibrazione
 let resizeTimer = null;
 
+// Schermo piccolo (telefono): barra per chi assiste nascosta, si riapre con ⚙.
+function updateCompact() {
+  document.body.classList.toggle("compact", innerWidth < 700 || innerHeight < 500);
+}
+updateCompact();
+$("#btn-tools").addEventListener("click", () => document.body.classList.toggle("show-tools"));
+
 function deviceKey() {
   return `${screen.width}x${screen.height}@${video.videoWidth}x${video.videoHeight}`;
 }
@@ -177,7 +191,12 @@ function openPool() {
 }
 
 addEventListener("resize", () => {
-  if (mode === "dasher") dasher?.resize();
+  updateCompact();
+  board.relayout();
+  if (mode === "dasher" && dasher) {
+    dasher.orientation = dasherOrientation();
+    dasher.resize();
+  }
   clearTimeout(resizeTimer);
   // Dopo una rotazione anche il video della fotocamera si gira, con un po' di ritardo.
   resizeTimer = setTimeout(checkWindowShape, 800);
@@ -312,10 +331,11 @@ function showMenu() {
     { label: `Scrittura continua\npiù lenta (${settings.dasherSpeed.toFixed(1)})`, kind: "cmd", action: () => { changeDasherSpeed(-0.2); showMenu(); } },
     { label: `Scrittura continua\npiù veloce (${settings.dasherSpeed.toFixed(1)})`, kind: "cmd", action: () => { changeDasherSpeed(0.2); showMenu(); } },
     {
-      label: `Scrittura continua:\n${settings.dasherOrientation === "horizontal" ? "orizzontale" : "verticale"}`,
+      label: `Scrittura continua:\n${DASHER_LAYOUTS[settings.dasherLayout]}`,
       kind: "cmd",
       action: () => {
-        settings.dasherOrientation = settings.dasherOrientation === "horizontal" ? "vertical" : "horizontal";
+        const order = Object.keys(DASHER_LAYOUTS);
+        settings.dasherLayout = order[(order.indexOf(settings.dasherLayout) + 1) % order.length];
         applySettings();
         showMenu();
       },
@@ -338,7 +358,7 @@ function startDasher() {
   });
   dasher.model = new LetterModel(predictor.words, predictor.user.uni); // include le parole imparate
   dasher.speed = settings.dasherSpeed;
-  dasher.orientation = settings.dasherOrientation;
+  dasher.orientation = dasherOrientation();
   dasher.start();
 }
 

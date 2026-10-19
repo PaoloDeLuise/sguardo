@@ -219,6 +219,17 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 @keyframes blink { 50% { opacity: 0; } }
 
+/* Schermi piccoli (telefono): la barra per chi assiste si nasconde e si riapre con ⚙, la barra
+   del testo si abbassa. In orizzontale le celle passano da ~76 a ~120 px di altezza. */
+.tools-toggle { display: none; flex: none; margin-left: 12px; font-size: 1.2rem; padding: 2px 10px; }
+body.compact .tools-toggle { display: inline-block; margin-left: auto; }
+body.compact:not(.show-tools) #toolbar { display: none !important; }
+body.compact #toolbar { flex-wrap: wrap; min-height: 0; gap: 6px; padding: 4px 8px; }
+body.compact #compose { min-height: 44px; padding: 4px 12px; font-size: 1.3rem; }
+body.compact #compose .hint { display: none; }
+body.compact #board { gap: 6px; padding: 6px; }
+body.compact .cell { border-radius: 10px; }
+
 /* Modalità mouse: niente fotocamera né calibrazione */
 #toolbar.mouse .cam, #toolbar.mouse #btn-calib, #toolbar.mouse #btn-last-result { display: none; }
 .cell.selected { animation: flash 0.6s ease-out; }
