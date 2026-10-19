@@ -171,6 +171,13 @@ const RESIZE_TOLERANCE = 0.03;
 let calibratedSize = null; // { w, h } della finestra durante l'ultima calibrazione
 let resizeTimer = null;
 
+// Ogni orientamento ha le sue calibrazioni: la prima volta completa, poi basta la rapida.
+function calibrateForOrientation() {
+  openPool();
+  toast(model ? `Schermo in ${orientation()}: ricalibrazione rapida` : `Prima volta in ${orientation()}: calibrazione completa`, 4000);
+  calibrate(model ? "quick" : "full");
+}
+
 // Schermo piccolo (telefono): barra per chi assiste nascosta, si riapre con ⚙.
 function updateCompact() {
   document.body.classList.toggle("compact", innerWidth < 700 || innerHeight < 500);
@@ -178,17 +185,33 @@ function updateCompact() {
 updateCompact();
 $("#btn-tools").addEventListener("click", () => document.body.classList.toggle("show-tools"));
 
-function deviceKey() {
+// L'orientamento si legge dalla forma della finestra: su molti Android le dimensioni dello
+// schermo e del video della fotocamera non cambiano ruotando, quindi da sole non bastano.
+function orientation() {
+  return innerWidth >= innerHeight ? "orizzontale" : "verticale";
+}
+
+function baseDevice() {
   return `${screen.width}x${screen.height}@${video.videoWidth}x${video.videoHeight}`;
+}
+
+function deviceKey() {
+  return `${baseDevice()}|${orientation()}`;
 }
 
 function openPool() {
   const device = deviceKey();
   const key = `${POOL_KEY}:${device}`;
-  // Le versioni precedenti salvavano un solo archivio sotto POOL_KEY.
-  const legacy = load(POOL_KEY);
+  // Archivi delle versioni precedenti (senza orientamento: un solo archivio sotto POOL_KEY, poi
+  // uno per dimensioni di schermo e video): valgono per l'orizzontale, quello del PC.
+  const previous = () => {
+    if (orientation() !== "orizzontale") return undefined;
+    const legacy = load(POOL_KEY);
+    const old = load(`${POOL_KEY}:${baseDevice()}`) ?? (legacy?.device === baseDevice() ? legacy : undefined);
+    return old ? { ...old, device } : undefined;
+  };
   pool = new CalibrationPool(
-    { load: () => load(key) ?? (legacy?.device === device ? legacy : undefined), save: (data) => save(key, data) },
+    { load: () => load(key) ?? previous(), save: (data) => save(key, data) },
     device,
   );
   model = pool.train();
@@ -207,12 +230,20 @@ addEventListener("resize", () => {
   resizeTimer = setTimeout(checkWindowShape, 800);
 });
 
+let rotatedDuringCalibration = false;
+
 function checkWindowShape() {
-  if (!pool || MOUSE_MODE || !["board", "dasher", "result", "prompt"].includes(mode)) return;
+  if (!pool || MOUSE_MODE) return;
+  if (mode === "calib" && deviceKey() !== pool.device) {
+    // Girato durante la calibrazione: i punti erano per l'altra forma dello schermo. Si
+    // interrompe e si riparte nel nuovo orientamento (vedi calibrate()).
+    rotatedDuringCalibration = true;
+    calibrator.abort();
+    return;
+  }
+  if (!["board", "dasher", "result", "prompt"].includes(mode)) return;
   if (deviceKey() !== pool.device) {
-    openPool();
-    toast("Schermo girato: ricalibro per questo orientamento");
-    calibrate(model ? "quick" : "full");
+    calibrateForOrientation();
     return;
   }
   if (!calibratedSize || !model) return;
@@ -490,6 +521,11 @@ async function calibrate(kind = "full") {
     }
   } catch (e) {
     if (e instanceof Aborted) {
+      if (rotatedDuringCalibration) {
+        rotatedDuringCalibration = false;
+        calibrateForOrientation();
+        return;
+      }
       show(model ? "board" : "start");
       return;
     }
