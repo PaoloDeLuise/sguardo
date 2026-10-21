@@ -289,6 +289,18 @@ body.compact .cell { border-radius: 10px; }
 
 #dasher { flex: 1; display: block; width: 100%; min-height: 0; }
 
+/* Scrittura a mano: area di disegno a sinistra e celle a destra (sotto, con lo schermo in verticale) */
+#draw { flex: 1; display: flex; min-height: 0; }
+#draw-canvas { flex: 1; min-width: 0; min-height: 0; display: block; touch-action: none; }
+#draw .cells { flex: 0 0 36%; min-height: 0; gap: 8px; padding: 8px; }
+@media (orientation: portrait) {
+  #draw { flex-direction: column; }
+  #draw .cells { flex: 0 0 34%; }
+}
+body.compact #draw .cells { gap: 6px; padding: 6px; }
+#draw .cell { font-size: clamp(1.1rem, 3.6vmin, 2.4rem); }
+#draw .cell.letter { font-size: clamp(1.8rem, 7vmin, 4rem); }
+
 /* Calibrazione */
 #calib { position: fixed; inset: 0; background: var(--calib-bg); z-index: 10; }
 #calib-target {
@@ -376,6 +388,8 @@ select {
   z-index: 20;
   will-change: transform;
 }
+/* Scrittura a mano: il puntatore pieno = penna abbassata */
+#gaze-dot.pen { background: var(--accent); }
 
 @media (max-width: 600px) {
   .dwell { font-size: 0.85rem; }

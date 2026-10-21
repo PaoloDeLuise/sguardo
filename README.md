@@ -136,7 +136,28 @@ con gli occhi.
    **scrittura continua**: le lettere arrivano dall'alto, affiancate e grandi quanto sono probabili;
    si guarda in alto, verso la lettera voluta, per avanzare e in basso per tornare indietro (e
    cancellare). Dal menu si può passare alla versione verticale (lettere da destra).
-5. **Cambio di postura.** Se la testa resta spostata o inclinata per più di 3 secondi compare un
+5. **Scrittura a mano** (menu → *Scrittura a mano*, o **Scrivi a mano** nella barra, o il tasto `H`):
+   il puntatore disegna le lettere una alla volta. Pensata per la modalità con la testa, ma vale
+   per tutte. Si attiva solo quando la si sceglie: non cambia nulla per chi usa la tastiera.
+   - **Penna:** un puntatore non ha pulsante, quindi **si chiudono gli occhi per circa mezzo
+     secondo** (più di un battito normale, meno dei 2 secondi del menu) per abbassare la penna e di
+     nuovo per alzarla. A penna alzata il puntatore si muove senza lasciare segno; uscendo
+     dall'area di disegno la penna si alza da sola.
+   - **Fine lettera:** passata la *pausa tra le lettere* (2,5 s, regolabile nel menu) dall'ultimo
+     tratto la lettera viene riconosciuta e scritta. Le lettere a più tratti (E, F, H, T...) si
+     fanno alzando la penna tra un tratto e l'altro, entro la pausa.
+   - **Riconoscimento:** una lettera alla volta, non parole intere (quelle le completano i
+     suggerimenti dopo una o due lettere). Il disegno è confrontato con modelli di lettere ($P) e
+     il linguaggio corregge le ambiguità (dopo «cas» una A è più probabile di una R). Non serve
+     scaricare nulla e gira su qualunque PC (circa 25 ms a lettera).
+   - **Correzioni:** accanto al disegno le celle propongono due parole e, se il disegno era
+     ambiguo, due **alternative** alla lettera scritta («forse»). Sceglierne una sostituisce la
+     lettera e **insegna** quel disegno a Sguardo, che la volta dopo lo riconosce meglio (si
+     dimenticano dal menu). Accenti, numeri e punteggiatura: dalla **Tastiera**.
+   - **Stato della verifica:** provata nell'interfaccia (con il mouse) e con disegni sintetici
+     deformati (`node tools/test-recognizer.mjs`), non ancora con una persona che disegna con la
+     testa: la precisione vera dipende dal tremolio del puntatore e si saprà solo provando.
+6. **Cambio di postura.** Se la testa resta spostata o inclinata per più di 3 secondi compare un
    avviso e dopo 5 secondi parte la ricalibrazione rapida. **Non ora** la rimanda di 3 minuti.
    (Vale solo con il controllo a occhi: con la testa, muoverla è il comando.)
 
@@ -174,7 +195,7 @@ le celle candidate; quella in vantaggio è evidenziata.
 
 - clic su un punto mentre la persona lo guarda = un punto di calibrazione in più (cerchio verde;
   grigio se l'occhio si stava muovendo). Il clic destro calibra senza selezionare nulla;
-- tasti: `C` calibrazione completa, `R` rapida, `M` menu, `D` scrittura continua, `P` punto,
+- tasti: `C` calibrazione completa, `R` rapida, `M` menu, `D` scrittura continua, `H` scrittura a mano, `P` punto,
   `Esc` interrompe la calibrazione;
 - **Nuova persona** cancella le calibrazioni salvate (quando Sguardo passa a un'altra persona);
 - `http://localhost:8000/?mouse`: il mouse fa le veci dello sguardo, per provare senza fotocamera.
@@ -240,6 +261,7 @@ node tools/test-predictor.mjs    # suggerimento delle parole
 node tools/test-calibration.mjs  # etichette dei dati raccolti con il punto in movimento
 node tools/test-modes.mjs        # modalità occhi / testa / occhi + testa, con dati sintetici
 node tools/evaluate.mjs --modes  # le tre modalità sulle stesse registrazioni
+node tools/test-recognizer.mjs   # scrittura a mano con disegni sintetici (--tune per i pesi; lento)
 node tools/simulate-dasher.mjs   # scrittura continua con uno sguardo simulato (errore ~100 px)
 node tools/simulate-dwell.mjs    # selezione delle celle con uno sguardo simulato, PC e telefono
 ```
@@ -263,6 +285,8 @@ registrazioni, non su una sola: tra una sessione e l'altra cambiano postura e lu
 | `js/keyboard.js` | Tastiera a due passaggi, frasi rapide e personali |
 | `js/predictor.js` | Suggerimento parole: frequenze italiane + parole usate dalla persona |
 | `js/dasher.js` | Scrittura continua |
+| `js/draw.js` | Scrittura a mano: area di disegno, penna (battito lungo), fine lettera |
+| `js/recognizer.js` | Riconoscimento delle lettere disegnate ($P) con aiuto del linguaggio e lettere imparate |
 | `js/voice.js` | Voce clonata nella pagina (richieste a `serve.py`, memoria delle frasi) |
 | `serve.py` | Server locale: file, voce, registrazioni; `--https` per il telefono |
 | `voice.py` | Clonazione e generazione della voce con XTTS-v2 |

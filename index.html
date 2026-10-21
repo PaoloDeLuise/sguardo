@@ -89,6 +89,7 @@
         <option value="head">Controllo: testa</option>
         <option value="both">Controllo: occhi + testa</option>
       </select>
+      <button id="btn-draw" title="Scrittura a mano: il puntatore disegna le lettere (la penna si alza e si abbassa chiudendo gli occhi mezzo secondo)">Scrivi a mano</button>
       <button id="btn-dot">Punto: sì</button>
       <button id="btn-last-result" title="Riapre il risultato dell'ultima calibrazione completa (per vedere gli errori o salvare i dati)">Ultimo risultato</button>
       <button id="btn-calib">Ricalibra</button>
@@ -104,6 +105,12 @@
 
   <!-- Scrittura continua (Dasher) -->
   <canvas id="dasher" hidden></canvas>
+
+  <!-- Scrittura a mano: area di disegno e celle accanto -->
+  <section id="draw" hidden>
+    <canvas id="draw-canvas"></canvas>
+    <div id="draw-cells" class="cells"></div>
+  </section>
 
   <!-- Calibrazione -->
   <section id="calib" hidden>

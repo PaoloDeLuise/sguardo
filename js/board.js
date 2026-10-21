@@ -27,12 +27,13 @@ export class DwellBoard {
 
   // items: array di { label, kind, ... } o null per le celle vuote, riga per riga.
   // kind: "letter" | "group" | "suggest" | "cmd" | "phrase" (solo per lo stile).
-  setLayout(cols, rows, items) {
-    this.layout = [cols, rows, items];
+  // transpose: false per le griglie che scelgono da sole la forma (la scrittura a mano).
+  setLayout(cols, rows, items, transpose = true) {
+    this.layout = [cols, rows, items, transpose];
     // Schermo più alto che largo (telefono in verticale): la griglia si traspone, 4x3 diventa
     // 3x4. Gli angoli restano angoli (Sì e No, "Indietro" in basso a destra) e le celle non
     // diventano strisce strette.
-    if (innerHeight > innerWidth && cols > rows) {
+    if (transpose && innerHeight > innerWidth && cols > rows) {
       const t = [];
       items.forEach((item, i) => { t[(i % cols) * rows + Math.floor(i / cols)] = item; });
       [cols, rows, items] = [rows, cols, t];
