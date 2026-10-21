@@ -25,6 +25,7 @@ const RECAL_MIN_INTERVAL_MS = 60_000; // non riproporre la ricalibrazione troppo
 const SNOOZE_MS = 180_000;            // dopo "Non ora"
 const PROMPT_SECONDS = 5;             // conto alla rovescia prima della ricalibrazione rapida
 const RESULT_AUTO_SECONDS = 10;       // dopo la calibrazione si prosegue da soli
+const RESULT_GRACE_MS = 3000;         // all'apertura del risultato le celle non scelgono: lo sguardo è ancora dov'era
 
 // ?mouse nell'indirizzo: il mouse fa le veci dello sguardo (per provare la tastiera senza calibrare).
 const MOUSE_MODE = new URLSearchParams(location.search).has("mouse");
@@ -816,12 +817,15 @@ function showResult(r, again = false) {
       <div>Errore medio <span class="big-number">${Math.round(r.meanPx)} px</span> (${pct}% della diagonale)</div>
       <p>Calibrazioni salvate: ${r.sessions}. Più sono, più la stima regge ai cambi di postura.</p>
       <p>Fissa una delle due celle, oppure continuo da solo tra <b id="result-count"></b> secondi.</p>`;
-    resultBoard.setLayout(2, 1, [{ label: "Ricalibra", kind: "cmd", action: () => calibrate("full") }, goOn]);
+    // "Continua" per prima: a fine calibrazione lo sguardo resta dove era e finire per sbaglio su
+    // "Ricalibra" faceva ripartire la calibrazione in continuazione.
+    resultBoard.setLayout(2, 1, [goOn, { label: "Ricalibra", kind: "cmd", action: () => calibrate("full") }]);
   }
   $("#btn-diag").hidden = $("#btn-download").hidden = !(lastSession && !r.error);
   $("#btn-download").textContent = "Salva dati";
   $("#btn-download").disabled = false;
   show("result");
+  resultBoard.cooldownUntil = performance.now() + RESULT_GRACE_MS;
   if (again) {
     $("#result-body").querySelector("p:last-child")?.remove(); // niente "continuo da solo tra…"
   } else if (!r.error) {
