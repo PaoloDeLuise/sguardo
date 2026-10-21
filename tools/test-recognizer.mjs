@@ -8,41 +8,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { LETTER_SHAPES, TUNING, addPersonal, inkSize, priorFromChildren, recognize, toCloud } from "../js/recognizer.js";
 import { LetterModel } from "../js/dasher.js";
-
-let seed = 7;
-const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-const gauss = () => Math.sqrt(-2 * Math.log(rnd() || 1e-9)) * Math.cos(2 * Math.PI * rnd());
-const between = (a, b) => a + (b - a) * rnd();
-
-// Disegno "a mano" di una lettera: sceglie un modo di scriverla e lo deforma.
-// noise: grandezza del disturbo in lunghezze della lettera (0.05 = 5% dell'altezza).
-function draw(ch, noise) {
-  const variants = LETTER_SHAPES[ch];
-  const strokes = variants[Math.floor(rnd() * variants.length)];
-  const sx = between(0.75, 1.35), shear = between(-0.15, 0.15), rot = between(-0.2, 0.2);
-  const phase = [rnd() * 6, rnd() * 6, rnd() * 6, rnd() * 6];
-  const out = strokes.map((s) => {
-    // punti a intervalli irregolari lungo il tratto (il puntatore va a scatti)
-    const m = Math.floor(between(25, 70));
-    const lens = [0];
-    for (let i = 1; i < s.length; i++) lens.push(lens[i - 1] + Math.hypot(s[i][0] - s[i - 1][0], s[i][1] - s[i - 1][1]));
-    const ts = Array.from({ length: m }, (_, i) => (i + between(-0.3, 0.3)) / (m - 1)).map((t) => Math.min(1, Math.max(0, t))).sort((a, b) => a - b);
-    return ts.map((t, k) => {
-      const d = t * lens.at(-1);
-      let i = 1;
-      while (i < s.length - 1 && lens[i] < d) i++;
-      const u = (d - lens[i - 1]) / (lens[i] - lens[i - 1] || 1);
-      let x = s[i - 1][0] + u * (s[i][0] - s[i - 1][0]), y = s[i - 1][1] + u * (s[i][1] - s[i - 1][1]);
-      x = x * sx + shear * y;
-      const [rx, ry] = [x * Math.cos(rot) - y * Math.sin(rot), x * Math.sin(rot) + y * Math.cos(rot)];
-      // deriva lenta (ampia) + tremolio veloce
-      const wob = noise * (Math.sin(k / 6 + phase[0]) + 0.6 * Math.sin(k / 3 + phase[1]));
-      const wob2 = noise * (Math.cos(k / 5 + phase[2]) + 0.6 * Math.sin(k / 2.5 + phase[3]));
-      return [rx + wob + gauss() * noise * 0.5, ry + wob2 + gauss() * noise * 0.5];
-    });
-  });
-  return out;
-}
+import { draw, rnd, setSeed } from "./synthetic-drawing.mjs";
 
 // Parole vere, pesate per frequenza, per provare il linguaggio (lettera da disegnare dopo il prefisso).
 const words = readFileSync(new URL("../data/parole-it.txt", import.meta.url), "utf8").split(/\r?\n/).filter((w) => /^[a-z]{3,}$/.test(w)).slice(0, 3000);
@@ -91,7 +57,7 @@ Object.assign(TUNING, { tau: grid.at(-1)[0], language: grid.at(-1)[1] });
 console.log("solo forma (senza linguaggio): " + shapeOnly.map((r) => pct(r.top1)).join(" "));
 
 // Controlli di buon senso
-seed = 11;
+setSeed(11);
 let clean = 0;
 for (const ch of Object.keys(LETTER_SHAPES)) if (recognize(draw(ch, 0.005))[0].ch === ch) clean++;
 assert.ok(clean >= 25, `senza disturbo quasi tutte le lettere devono uscire giuste (${clean}/26)`);
@@ -100,7 +66,7 @@ assert.ok(inkSize([[[0, 0], [30, 40]]]) === 50, "diagonale del segno");
 assert.ok(toCloud([[[0, 0], [0, 100]]]).length === 32, "32 punti");
 
 // Modelli personali: un disegno insolito, scelto a mano, la volta dopo viene riconosciuto.
-seed = 5;
+setSeed(5);
 const odd = [[[0, 0], [0.3, 0.0], [0.3, 0.5], [0.0, 0.5], [0.3, 0.5], [0.3, 1.0], [0, 1.0]]]; // una "S" quadrata
 const personal = {};
 const before = recognize(odd, { personal }).findIndex((r) => r.ch === "S");

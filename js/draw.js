@@ -1,17 +1,16 @@
-// Scrittura a mano: il puntatore (testa, occhi o entrambi) disegna le lettere una alla volta.
+// Scrittura a mano: il puntatore (testa, occhi o entrambi) disegna una lettera o una parola.
 //
-// Un puntatore non ha "pulsante": la penna si alza e si abbassa con un battito di ciglia lungo
-// (circa mezzo secondo, più di uno spontaneo e meno dei 2 secondi che aprono il menu).
-// - penna alzata: il puntatore si muove senza lasciare traccia;
+// Un puntatore non ha "pulsante": la penna si abbassa e si alza stando fermi.
+// - ferma per `stillMs` (un cerchio si riempie attorno al puntatore): la penna cambia stato.
+//   Nel momento del cambio il puntatore è fermo, quindi il tratto parte esattamente da lì;
 // - penna abbassata: ogni fotogramma aggiunge un punto al tratto;
-// - penna alzata per `gapMs` dopo l'ultimo tratto: la lettera è finita e si riconosce.
-// Se il puntatore esce dall'area di disegno (per esempio sulle celle accanto) la penna si alza.
+// - penna alzata: il puntatore si muove senza lasciare traccia (per raggiungere il tratto dopo);
+// - penna alzata per `gapMs` dopo l'ultimo tratto: il disegno è finito e si riconosce.
+// Dopo ogni cambio bisogna muoversi prima di poter cambiare ancora: restare fermi a penna alzata
+// per finire non abbassa di nuovo la penna. Se il puntatore esce dall'area la penna si alza.
 // Con il mouse (?mouse nell'indirizzo) o il dito: tenere premuto abbassa la penna.
 
-const STILL_LIFT_MS = 3000;  // penna abbassata e ferma da tanto: si alza da sola
-const STILL_PX = 8;          // "ferma" = si muove meno di così
 const MIN_POINT_GAP_PX = 2;  // punti più vicini di così non aggiungono nulla
-const MIN_INK_FRACTION = 0.08; // un segno più piccolo di così (rispetto al lato corto) è rumore
 const FLASH_MS = 1000;
 
 const PALETTES = {
@@ -21,18 +20,18 @@ const PALETTES = {
 
 export class DrawPad {
   // getGaze(): {x, y} in pixel della finestra o null; isPaused(): occhi chiusi.
-  // onLetter(strokes): tratti [[x, y], ...] relativi all'area di disegno, quando la lettera è finita.
+  // onDrawing(strokes): tratti [[x, y], ...] relativi all'area, quando il disegno è finito.
   // onPen(down): la penna è cambiata (per il colore del puntatore).
-  constructor(canvas, { getGaze, isPaused, onLetter, onPen }) {
+  constructor(canvas, { getGaze, isPaused, onDrawing, onPen }) {
     this.canvas = canvas;
-    Object.assign(this, { getGaze, isPaused, onLetter, onPen });
-    this.gapMs = 2500;
+    Object.assign(this, { getGaze, isPaused, onDrawing, onPen });
+    this.gapMs = 2000;
+    this.stillMs = 700;
     this.palette = PALETTES.dark;
-    this.pointerHint = "chiudi gli occhi mezzo secondo";
     this.running = false;
+    this.pointerPens = false;
     this.clear();
-    // Mouse o dito sull'area: tenere premuto = penna abbassata. In modalità occhi/testa non serve
-    // ma non disturba: chi assiste può disegnare al posto della persona.
+    // Mouse o dito sull'area: tenere premuto = penna abbassata (prove, o chi assiste disegna per la persona).
     canvas.addEventListener("pointerdown", (e) => { if (this.pointerPens) { canvas.setPointerCapture?.(e.pointerId); this.setPen(true); } });
     canvas.addEventListener("pointerup", () => { if (this.pointerPens) this.setPen(false); });
   }
@@ -43,9 +42,12 @@ export class DrawPad {
     this.strokes = [];   // tratti finiti e in corso, in coordinate dell'area
     this.pen = false;
     this.penUpAt = 0;
-    this.lastMoveAt = 0;
+    this.anchor = null;  // dove il puntatore ha cominciato a stare fermo
+    this.stillSince = 0;
+    this.armed = true;   // dopo un cambio di penna serve un movimento prima del successivo
+    this.progress = 0;
     this.flashUntil = 0;
-    this.flashChar = "";
+    this.flashText = "";
     this.cursor = null;
   }
 
@@ -76,15 +78,15 @@ export class DrawPad {
     this.canvas.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  // Il battito lungo alterna penna alzata e abbassata.
-  togglePen() { this.setPen(!this.pen); }
+  // Quanto ci si può muovere restando "fermi": il puntatore trema, e di più con testa e occhi.
+  get stillPx() {
+    return Math.max(14, Math.min(this.rect.width, this.rect.height) * 0.025);
+  }
 
-  setPen(down) {
+  setPen(down, t = performance.now()) {
     if (down === this.pen) return;
     this.pen = down;
-    const now = performance.now();
-    this.penUpAt = now;
-    this.lastMoveAt = now;
+    this.penUpAt = t;
     if (down) {
       const c = this.cursor;
       this.strokes.push(c ? [[c.x, c.y]] : []);
@@ -99,34 +101,52 @@ export class DrawPad {
     const r = this.rect;
     const inside = g && g.x >= r.left && g.x <= r.right && g.y >= r.top && g.y <= r.bottom;
     this.cursor = inside ? { x: g.x - r.left, y: g.y - r.top } : null;
-    if (!inside && this.pen) this.setPen(false);
+    if (!inside && this.pen) this.setPen(false, t);
 
-    if (this.pen && this.cursor && !this.isPaused()) {
-      const stroke = this.strokes.at(-1);
-      const last = stroke.at(-1);
-      if (!last || Math.hypot(this.cursor.x - last[0], this.cursor.y - last[1]) >= MIN_POINT_GAP_PX) stroke.push([this.cursor.x, this.cursor.y]);
-      if (!last || Math.hypot(this.cursor.x - last[0], this.cursor.y - last[1]) > STILL_PX) this.lastMoveAt = t;
-      else if (t - this.lastMoveAt > STILL_LIFT_MS) this.setPen(false);
+    const c = this.cursor;
+    if (!c || this.isPaused()) {
+      this.progress = 0;
+      this.anchor = null;
+    } else {
+      if (this.pen) {
+        const stroke = this.strokes.at(-1);
+        const last = stroke.at(-1);
+        if (!last || Math.hypot(c.x - last[0], c.y - last[1]) >= MIN_POINT_GAP_PX) stroke.push([c.x, c.y]);
+      }
+      if (!this.pointerPens) this.watchStill(c, t);
     }
 
     if (!this.pen && this.strokes.length && t - this.penUpAt >= this.gapMs) this.finish();
   }
 
-  // Lettera finita: si consegnano i tratti, se non sono solo rumore, e si pulisce l'area.
+  // Fermo abbastanza a lungo: la penna cambia stato.
+  watchStill(c, t) {
+    if (!this.anchor || Math.hypot(c.x - this.anchor.x, c.y - this.anchor.y) > this.stillPx) {
+      this.anchor = { x: c.x, y: c.y };
+      this.stillSince = t;
+      this.armed = true;
+      this.progress = 0;
+      return;
+    }
+    if (!this.armed) return;
+    this.progress = (t - this.stillSince) / this.stillMs;
+    if (this.progress >= 1) {
+      this.armed = false;
+      this.progress = 0;
+      this.setPen(!this.pen, t);
+    }
+  }
+
+  // Disegno finito: si consegnano i tratti e si pulisce l'area.
   finish() {
     const strokes = this.strokes.filter((s) => s.length > 1);
     this.strokes = [];
-    const pts = strokes.flat();
-    if (!pts.length) return;
-    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-    const size = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-    if (size < Math.min(this.rect.width, this.rect.height) * MIN_INK_FRACTION) return this.onLetter(null);
-    this.onLetter(strokes);
+    if (strokes.length) this.onDrawing(strokes);
   }
 
-  // Mostra per un momento la lettera riconosciuta.
-  flash(ch) {
-    this.flashChar = ch;
+  // Mostra per un momento ciò che è stato riconosciuto.
+  flash(text) {
+    this.flashText = text;
     this.flashUntil = performance.now() + FLASH_MS;
   }
 
@@ -141,15 +161,16 @@ export class DrawPad {
     if (now < this.flashUntil) {
       ctx.globalAlpha = Math.min(0.35, ((this.flashUntil - now) / FLASH_MS) * 0.5);
       ctx.fillStyle = p.flash;
-      ctx.font = `700 ${Math.min(H * 0.8, W * 0.8)}px system-ui, sans-serif`;
+      const size = Math.min(H * 0.8, (W * 1.6) / Math.max(1, this.flashText.length));
+      ctx.font = `700 ${size}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(this.flashChar, W / 2, H / 2);
+      ctx.fillText(this.flashText, W / 2, H / 2);
       ctx.globalAlpha = 1;
     }
 
     ctx.strokeStyle = p.ink;
-    ctx.lineWidth = Math.max(6, Math.min(W, H) * 0.02);
+    ctx.lineWidth = Math.max(5, Math.min(W, H) * 0.014);
     ctx.lineCap = ctx.lineJoin = "round";
     for (const s of this.strokes) {
       if (s.length < 2) continue;
@@ -159,19 +180,31 @@ export class DrawPad {
       ctx.stroke();
     }
 
-    // Stato della penna e, a penna alzata con un segno da finire, il tempo che manca.
+    // Cerchio che si riempie attorno al puntatore mentre sta fermo.
+    if (this.cursor && this.progress > 0.12) {
+      ctx.strokeStyle = this.pen ? p.penUp : p.ink;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(this.cursor.x, this.cursor.y, 30, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, this.progress));
+      ctx.stroke();
+    }
+
+    // Stato della penna e, a penna alzata con un disegno da finire, il tempo che manca.
     ctx.font = `${Math.max(14, Math.min(22, W / 40))}px system-ui, sans-serif`;
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillStyle = this.pen ? p.ink : p.penUp;
-    const how = this.pointerPens ? "tieni premuto" : this.pointerHint;
-    ctx.fillText(this.pen ? `✎ penna abbassata: disegna (${how} per alzarla)` : `✎ penna alzata: ${how} per scrivere`, 16, 14);
+    const how = this.pointerPens ? "tieni premuto" : "fermo un attimo";
+    ctx.fillText(this.pen ? `✎ penna abbassata: disegna (${this.pointerPens ? "rilascia" : "fermo un attimo"} per alzarla)` : `✎ penna alzata: ${how} per scrivere`, 16, 14);
     if (!this.pen && this.strokes.length) {
       const left = Math.max(0, 1 - (now - this.penUpAt) / this.gapMs);
       ctx.fillStyle = p.frame;
       ctx.fillRect(16, 46, W - 32, 6);
       ctx.fillStyle = p.penUp;
       ctx.fillRect(16, 46, (W - 32) * left, 6);
+    } else if (!this.strokes.length && !this.pen) {
+      ctx.fillStyle = p.text;
+      ctx.fillText("Una lettera, oppure una parola: lettere in fila da sinistra a destra.", 16, 46);
     }
   }
 }

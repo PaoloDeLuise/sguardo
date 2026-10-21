@@ -6,8 +6,12 @@
 // dopo "cas" una A è molto più probabile di una R, anche se il disegno somiglia a entrambe.
 // Le lettere scelte a mano tra le alternative diventano modelli personali (vedi addPersonal).
 //
-// Riconosce una lettera alla volta. Le parole intere no: i suggerimenti le completano dopo
-// una o due lettere.
+// Una parola si scrive come lettere staccate in fila da sinistra a destra: groupLetters le separa
+// dalla posizione, ognuna è riconosciuta, e decodeWord sceglie nel dizionario la parola che
+// meglio spiega tutte le lettere insieme (una R storta dentro "casa" diventa A). Non si legge la
+// scrittura corsiva, con le lettere attaccate.
+
+import { normalize } from "./predictor.js";
 
 export const N_POINTS = 32;
 // tau: quanto pesa la distanza dal modello rispetto al linguaggio (più piccolo = conta di più il
@@ -201,4 +205,84 @@ export function inkSize(strokes) {
   if (!pts.length) return 0;
   const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
   return Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+}
+
+// ---------- parole ----------
+
+function box(strokes) {
+  const pts = strokes.flat();
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+}
+
+// Separa i tratti in lettere. Un tratto appartiene alla lettera con cui si sovrappone in
+// orizzontale (la barra della E, il puntino della I, la barra della T); altrimenti è una lettera
+// nuova. Funziona in qualunque ordine di tratti. Si scartano i gruppi più piccoli di minSize
+// (diagonale): sono rumore. Risultato: lettere da sinistra a destra, ognuna con i suoi tratti.
+export function groupLetters(strokes, minSize = 0) {
+  const groups = [];
+  for (const s of strokes.filter((st) => st.length > 1)) {
+    const b = box([s]);
+    let best = null, bestOverlap = 0;
+    for (const g of groups) {
+      // Riquadri allargati: un tratto verticale è largo zero e, anche se attraversa la barra di una
+      // T, senza margine non si sovrapporrebbe a niente.
+      const height = Math.max(b.y1 - b.y0, g.box.y1 - g.box.y0), pad = 0.03 * height;
+      const overlap = Math.min(b.x1, g.box.x1) - Math.max(b.x0, g.box.x0) + 2 * pad;
+      const narrow = Math.min(b.x1 - b.x0, g.box.x1 - g.box.x0) + 2 * pad;
+      if (overlap > 0.3 * narrow && overlap > bestOverlap) { best = g; bestOverlap = overlap; }
+    }
+    if (best) {
+      best.strokes.push(s);
+      best.box = box(best.strokes);
+    } else {
+      groups.push({ strokes: [s], box: b });
+    }
+  }
+  return groups.sort((a, b) => a.box.x0 - b.box.x0).filter((g) => inkSize(g.strokes) >= minSize).map((g) => g.strokes);
+}
+
+const WORD_WEIGHT = 1;   // peso della frequenza della parola
+const OOV_PENALTY = 11;  // una parola fuori dizionario (un nome) vale come la più rara del dizionario
+
+// Le parole del dizionario per lunghezza, con le lettere senza accenti: "perché" è PERCHE.
+export class Lexicon {
+  // words: ordinate per frequenza; userCounts: { parola: quante volte } imparate dalla persona.
+  constructor(words, userCounts = {}) {
+    this.byLength = new Map();
+    const add = (word, rank) => {
+      const key = normalize(word).toUpperCase();
+      if (!/^[A-Z]+$/.test(key)) return; // apostrofi, numeri: non si disegnano
+      if (!this.byLength.has(key.length)) this.byLength.set(key.length, []);
+      this.byLength.get(key.length).push({ word, key, penalty: WORD_WEIGHT * Math.log(rank + 10) });
+    };
+    words.forEach((w, i) => add(w, i));
+    for (const [w, n] of Object.entries(userCounts)) add(w, Math.max(0, 50 - 10 * n));
+  }
+}
+
+// costs: per ogni lettera disegnata, { A: distanza, B: distanza, ... }. Restituisce le parole più
+// probabili [{ text, score }] (score più basso = migliore), dizionario più "lettere come sono".
+export function decodeWord(costs, lexicon, n = 3) {
+  const per = (c) => c / TUNING.tau;
+  const literal = costs.map((c) => Object.entries(c).sort((a, b) => a[1] - b[1])[0]);
+  const out = [{ text: literal.map(([ch]) => ch.toLowerCase()).join(""), score: literal.reduce((t, [, d]) => t + per(d), 0) + OOV_PENALTY }];
+  for (const { word, key, penalty } of lexicon.byLength.get(costs.length) ?? []) {
+    let score = penalty;
+    for (let i = 0; i < key.length; i++) score += per(costs[i][key[i]]);
+    out.push({ text: word, score });
+  }
+  const seen = new Set();
+  return out.sort((a, b) => a.score - b.score).filter((c) => !seen.has(c.text) && seen.add(c.text)).slice(0, n);
+}
+
+// Lettere (ognuna con i suoi tratti) -> parole più probabili, o null se una lettera è illeggibile.
+export function recognizeWord(letters, { lexicon, personal = {}, n = 3 } = {}) {
+  const costs = [];
+  for (const strokes of letters) {
+    const r = recognize(strokes, { personal });
+    if (!r) return null;
+    costs.push(Object.fromEntries(r.map(({ ch, distance }) => [ch, distance])));
+  }
+  return decodeWord(costs, lexicon, n);
 }

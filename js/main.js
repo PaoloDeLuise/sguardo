@@ -7,7 +7,7 @@ import { Keyboard, DEFAULT_PHRASES, display } from "./keyboard.js";
 import { API_HEADERS, ClonedVoice } from "./voice.js";
 import { Dasher, LetterModel } from "./dasher.js";
 import { DrawPad } from "./draw.js";
-import { addPersonal, priorFromChildren, recognize } from "./recognizer.js";
+import { Lexicon, addPersonal, groupLetters, priorFromChildren, recognize, recognizeWord } from "./recognizer.js";
 import { Predictor } from "./predictor.js";
 import { CalibrationPool } from "./pool.js";
 import { PostureMonitor, meanPose } from "./posture.js";
@@ -21,7 +21,6 @@ const PHRASES_KEY = "sguardo.frasi.v1";
 const DRAW_KEY = "sguardo.scrittura-a-mano.v1";
 
 const MENU_EYES_CLOSED_MS = 2000;     // occhi chiusi per aprire il menu
-const PEN_BLINK_MIN_MS = 400;         // scrittura a mano: occhi chiusi almeno così (e meno del menu) alzano o abbassano la penna
 const RECAL_MIN_INTERVAL_MS = 60_000; // non riproporre la ricalibrazione troppo spesso
 const SNOOZE_MS = 180_000;            // dopo "Non ora"
 const PROMPT_SECONDS = 5;             // conto alla rovescia prima della ricalibrazione rapida
@@ -49,7 +48,7 @@ const filterY = new OneEuro();
 // dasherLayout: "auto" mette le lettere sul lato lungo dello schermo (orizzontale su PC e telefono
 // girato, verticale su telefono in verticale): nel simulatore (tools/simulate-dasher.mjs) lettere
 // più grandi danno il 92% di frasi completate contro il 62%, con il 75% di cancellazioni in meno.
-const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", background: "auto", control: "eyes", drawGapMs: 2500, ...load(SETTINGS_KEY) };
+const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", background: "auto", control: "eyes", drawGapMs: 2000, penStillMs: 700, ...load(SETTINGS_KEY) };
 if (!CONTROL_MODES.includes(settings.control)) settings.control = "eyes";
 
 // Sfondo: chiaro sul telefono (lo schermo vicino al viso lo illumina, la fotocamera amplifica
@@ -71,9 +70,9 @@ let keyboard = null;
 let dasher = null;
 let drawPad = null;
 let drawModel = null;     // probabilità delle lettere, per aiutare il riconoscimento
-let drawLast = null;      // ultima lettera disegnata: { strokes, alternatives }
+let drawLexicon = null;   // parole del dizionario per lunghezza, per leggere le parole disegnate
+let drawLast = null;      // ultimo disegno: { letters, kind, before, suffix, alternatives }
 const drawPersonal = load(DRAW_KEY) ?? {}; // lettere insegnate scegliendo tra le alternative
-let penBlinkSince = null;
 let eyesClosed = false;
 let pool = null;
 let model = null;
@@ -136,7 +135,6 @@ tracker.onFrame = (f) => {
     watchEyesClosed(f);
     watchPosture(f);
   }
-  if (mode === "draw") watchPenBlink(f);
 };
 
 function activeBoard() {
@@ -181,18 +179,6 @@ function watchEyesClosed(f) {
     menuOpenedByEyes = true;
     showMenu();
   }
-}
-
-// Scrittura a mano: un battito lungo (oltre PEN_BLINK_MIN_MS, meno del menu) alza o abbassa la penna.
-// Si agisce quando gli occhi si riaprono, così il puntatore non si muove durante il battito.
-function watchPenBlink(f) {
-  if (f.face && f.blink) {
-    penBlinkSince ??= f.t;
-    return;
-  }
-  const since = penBlinkSince;
-  penBlinkSince = null;
-  if (since !== null && f.face && f.t - since >= PEN_BLINK_MIN_MS && f.t - since < MENU_EYES_CLOSED_MS) drawPad?.togglePen();
 }
 
 // Postura cambiata rispetto all'ultima calibrazione: propone la ricalibrazione rapida.
@@ -358,7 +344,6 @@ function show(name) {
   // Nella scrittura continua e a mano la barra in alto si nasconde: più spazio per le lettere.
   $("#toolbar").hidden = ["start", "calib", "prompt", "dasher", "draw"].includes(name);
   for (const b of [board, resultBoard, promptBoard, drawBoard]) b.reset();
-  penBlinkSince = null;
   if (name !== "draw") dot.classList.remove("pen");
   renderDot();
 }
@@ -523,61 +508,83 @@ function showDasherMenu() {
 
 // Scrittura a mano: impostazioni e avvio.
 function showDrawMenu() {
-  const seconds = (settings.drawGapMs / 1000).toFixed(1);
+  const gap = (settings.drawGapMs / 1000).toFixed(1);
+  const still = (settings.penStillMs / 1000).toFixed(1);
   const taught = Object.values(drawPersonal).reduce((n, list) => n + list.length, 0);
   const items = [
     { label: "Avvia scrittura\na mano", kind: "suggest", action: startDraw },
-    { label: `Pausa tra le lettere\npiù breve (ora ${seconds} s)`, kind: "cmd", action: () => { changeDrawGap(-500); showDrawMenu(); } },
-    { label: `Pausa tra le lettere\npiù lunga (ora ${seconds} s)`, kind: "cmd", action: () => { changeDrawGap(500); showDrawMenu(); } },
+    { label: `Pausa tra i disegni\npiù breve (ora ${gap} s)`, kind: "cmd", action: () => { changeDraw("drawGapMs", -500, 1000, 5000); showDrawMenu(); } },
+    { label: `Pausa tra i disegni\npiù lunga (ora ${gap} s)`, kind: "cmd", action: () => { changeDraw("drawGapMs", 500, 1000, 5000); showDrawMenu(); } },
+    { label: `Penna: attesa da fermo\npiù breve (ora ${still} s)`, kind: "cmd", action: () => { changeDraw("penStillMs", -100, 400, 1500); showDrawMenu(); } },
+    { label: `Penna: attesa da fermo\npiù lunga (ora ${still} s)`, kind: "cmd", action: () => { changeDraw("penStillMs", 100, 400, 1500); showDrawMenu(); } },
     taught ? { label: `Dimentica le lettere\nimparate (${taught})`, kind: "cmd remove", action: () => { for (const k of Object.keys(drawPersonal)) delete drawPersonal[k]; save(DRAW_KEY, drawPersonal); showDrawMenu(); } } : null,
   ];
   items[11] = { label: "◂ Menu", kind: "cmd", action: showMenu };
   board.setLayout(4, 3, items);
 }
 
-function changeDrawGap(delta) {
-  settings.drawGapMs = clamp(settings.drawGapMs + delta, 1000, 5000);
-  if (drawPad) drawPad.gapMs = settings.drawGapMs;
+function changeDraw(key, delta, lo, hi) {
+  settings[key] = clamp(settings[key] + delta, lo, hi);
+  if (drawPad) { drawPad.gapMs = settings.drawGapMs; drawPad.stillMs = settings.penStillMs; }
   applySettings();
 }
 
-// Scrittura a mano: il puntatore disegna una lettera alla volta; il testo è quello della tastiera.
+// Scrittura a mano: il puntatore disegna una lettera o una parola; il testo è quello della tastiera.
 function startDraw() {
   show("draw");
   drawModel = new LetterModel(keyboard.predictor.words, keyboard.predictor.user.uni); // include le parole imparate
+  drawLexicon = new Lexicon(keyboard.predictor.words, keyboard.predictor.user.uni);
   drawLast = null;
   drawPad ??= new DrawPad($("#draw-canvas"), {
     getGaze: () => gaze,
     isPaused: () => eyesClosed,
-    onLetter: onDrawLetter,
+    onDrawing: onDrawing,
     onPen: (down) => dot.classList.toggle("pen", down),
   });
   drawPad.gapMs = settings.drawGapMs;
+  drawPad.stillMs = settings.penStillMs;
   drawPad.light = lightBackground();
   drawPad.pointerPens = MOUSE_MODE;
   showDrawCells();
   drawPad.start();
 }
 
-function onDrawLetter(strokes) {
-  if (!strokes) {
+// Un disegno finito: una lettera si aggiunge alla parola in corso; più lettere in fila sono una
+// parola intera, scelta nel dizionario con tutte le lettere insieme, e si scrive con lo spazio.
+function onDrawing(strokes) {
+  const letters = groupLetters(strokes, Math.min(drawPad.rect.width, drawPad.rect.height) * 0.05);
+  if (!letters.length) {
     toast("Segno troppo piccolo: disegna più grande", 2500);
     return;
   }
-  const prior = priorFromChildren(drawModel.children(keyboard.text));
-  const ranked = recognize(strokes, { prior, personal: drawPersonal });
-  if (!ranked) return;
-  keyboard.setText(keyboard.text + ranked[0].ch.toLowerCase());
-  drawLast = { strokes, alternatives: ranked.slice(1, 3).map((r) => r.ch) };
-  drawPad.flash(ranked[0].ch);
+  const text = keyboard.text;
+  if (letters.length === 1) {
+    const ranked = recognize(letters[0], { prior: priorFromChildren(drawModel.children(text)), personal: drawPersonal });
+    if (!ranked) return;
+    keyboard.setText(text + ranked[0].ch.toLowerCase());
+    drawLast = { letters, kind: "letter", before: text, suffix: "", alternatives: ranked.slice(1, 3).map((r) => r.ch.toLowerCase()) };
+    drawPad.flash(ranked[0].ch);
+  } else {
+    const words = recognizeWord(letters, { lexicon: drawLexicon, personal: drawPersonal });
+    if (!words) return;
+    const before = text && !/\s$/.test(text) ? `${text} ` : text; // la parola disegnata sta a sé
+    keyboard.setText(`${before}${words[0].text} `);
+    drawLast = { letters, kind: "word", before, suffix: " ", alternatives: words.slice(1, 3).map((w) => w.text) };
+    drawPad.flash(words[0].text);
+  }
   showDrawCells();
 }
 
-// Un'alternativa scelta sostituisce l'ultima lettera, e quel disegno diventa un modello personale.
-function pickDrawAlternative(ch) {
+// Un'alternativa scelta sostituisce ciò che è stato scritto, e quel disegno diventa un modello
+// personale: ogni lettera disegnata per la lettera giusta della parola scelta.
+function pickDrawAlternative(choice) {
   if (!drawLast) return;
-  if (addPersonal(drawPersonal, ch, drawLast.strokes)) save(DRAW_KEY, drawPersonal);
-  keyboard.setText(keyboard.text.slice(0, -1) + ch.toLowerCase());
+  const key = choice.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+  if (/^[A-Z]+$/.test(key) && key.length === drawLast.letters.length) {
+    drawLast.letters.forEach((strokes, i) => addPersonal(drawPersonal, key[i], strokes));
+    save(DRAW_KEY, drawPersonal);
+  }
+  keyboard.setText(drawLast.before + choice + drawLast.suffix);
   drawLast = null;
   showDrawCells();
 }
@@ -586,7 +593,7 @@ function pickDrawAlternative(ch) {
 function showDrawCells() {
   const after = (fn) => (...args) => { drawLast = null; fn(...args); showDrawCells(); };
   const suggestion = (w) => w && { label: w, kind: "suggest", action: after(() => keyboard.applySuggestion(w)) };
-  const alternative = (c) => c && { label: c, kind: "letter", hint: "forse", action: () => pickDrawAlternative(c) };
+  const alternative = (c) => c && { label: drawLast.kind === "letter" ? c.toUpperCase() : c, kind: drawLast.kind === "letter" ? "letter" : "suggest", hint: "forse", action: () => pickDrawAlternative(c) };
   const [s1, s2] = keyboard.predictor.suggest(keyboard.text, 2);
   const [a1, a2] = drawLast?.alternatives ?? [];
   const items = [
