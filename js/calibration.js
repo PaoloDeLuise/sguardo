@@ -131,10 +131,10 @@ export function pursuitExamples(pursuit, lagMs, skipMs = 250) {
 
 // Scarta i campioni presi mentre l'occhio non era fermo sul punto: iride orizzontale,
 // palpebra o blendshape orizzontale lontani dalla mediana del punto.
-export function cleanSamples(samples) {
+export function cleanSamples(samples, indices = [0, 2, 3]) {
   if (samples.length < 5) return samples;
   const keep = new Array(samples.length).fill(true);
-  for (const j of [0, 2, 3]) {
+  for (const j of indices) {
     const vals = samples.map((s) => s[j]);
     const med = median(vals);
     const mad = median(vals.map((v) => Math.abs(v - med))) || 1e-6;

@@ -22,6 +22,13 @@
       <li>Serve luce sul viso: evita finestre alle spalle.</li>
       <li>Durante la calibrazione segui il punto solo con gli occhi.</li>
     </ul>
+    <label class="control-pick">Il puntatore si muove con
+      <select id="control-start" class="control-select">
+        <option value="eyes">gli occhi</option>
+        <option value="head">la testa</option>
+        <option value="both">occhi e testa</option>
+      </select>
+    </label>
     <button id="btn-start" class="big">Avvia fotocamera</button>
     <p id="start-status" class="status"></p>
     <p class="source-link"><a href="https://github.com/PaoloDeLuise/sguardo" target="_blank" rel="noopener">Codice sorgente</a> · software libero, licenza AGPL-3.0</p>
@@ -77,6 +84,11 @@
         <b id="dwell-value">1.0 s</b>
         <button id="dwell-plus" aria-label="Aumenta tempo">+</button>
       </span>
+      <select id="control-toolbar" class="control-select" aria-label="Cosa muove il puntatore" title="Cosa muove il puntatore: gli occhi, la testa o entrambi (cambiandolo serve una nuova calibrazione)">
+        <option value="eyes">Controllo: occhi</option>
+        <option value="head">Controllo: testa</option>
+        <option value="both">Controllo: occhi + testa</option>
+      </select>
       <button id="btn-dot">Punto: sì</button>
       <button id="btn-last-result" title="Riapre il risultato dell'ultima calibrazione completa (per vedere gli errori o salvare i dati)">Ultimo risultato</button>
       <button id="btn-calib">Ricalibra</button>
@@ -122,6 +134,7 @@
   </section>
 
   <div id="toast" hidden></div>
+  <div id="center-mark" hidden></div>
 
   <canvas id="diag" hidden></canvas>
 

@@ -15,6 +15,7 @@ export class GazeTracker {
     this.onFrame = () => {};
     this.lastVideoTime = -1;
     this.running = false;
+    this.mode = "eyes"; // modalità di controllo: quali caratteristiche produce (vedi features.js)
   }
 
   async load() {
@@ -77,7 +78,7 @@ export class GazeTracker {
     for (const c of result.faceBlendshapes?.[0]?.categories ?? []) bs[c.categoryName] = c.score;
     const blink = ((bs.eyeBlinkLeft ?? 0) + (bs.eyeBlinkRight ?? 0)) / 2 > 0.6;
     const m = result.facialTransformationMatrixes?.[0]?.data;
-    const features = gazeFeatures(P, bs, m);
+    const features = gazeFeatures(P, bs, m, this.mode);
 
     const raw = () => ({
       lm: RAW_POINTS.map((i) => [round(lm[i].x * W), round(lm[i].y * H), round(lm[i].z * W)]),

@@ -311,6 +311,33 @@ body.compact .cell { border-radius: 10px; }
 
 #diag { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 30; cursor: pointer; }
 
+/* Scelta di cosa muove il puntatore (occhi, testa, entrambi) */
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--cell);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.control-pick { color: var(--muted); display: flex; gap: 8px; align-items: center; }
+#toolbar.mouse #control-toolbar { display: none; }
+
+/* Segno al centro dello schermo mentre si "ricentra" il puntatore */
+#center-mark {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border: 4px solid var(--accent);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 24;
+}
+#center-mark::after { content: ""; position: absolute; inset: 22px; border-radius: 50%; background: var(--accent); }
+
 /* Conferma della calibrazione con il clic */
 .click-mark {
   position: fixed;

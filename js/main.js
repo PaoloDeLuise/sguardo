@@ -9,6 +9,7 @@ import { Dasher, LetterModel } from "./dasher.js";
 import { Predictor } from "./predictor.js";
 import { CalibrationPool } from "./pool.js";
 import { PostureMonitor, meanPose } from "./posture.js";
+import { CLEAN_INDICES, CONTROL_LABELS, CONTROL_MODES, STABILITY } from "./features.js";
 
 const $ = (s) => document.querySelector(s);
 const POOL_KEY = "sguardo.calibrazioni.v1";
@@ -43,7 +44,8 @@ const filterY = new OneEuro();
 // dasherLayout: "auto" mette le lettere sul lato lungo dello schermo (orizzontale su PC e telefono
 // girato, verticale su telefono in verticale): nel simulatore (tools/simulate-dasher.mjs) lettere
 // più grandi danno il 92% di frasi completate contro il 62%, con il 75% di cancellazioni in meno.
-const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", background: "auto", ...load(SETTINGS_KEY) };
+const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", background: "auto", control: "eyes", ...load(SETTINGS_KEY) };
+if (!CONTROL_MODES.includes(settings.control)) settings.control = "eyes";
 
 // Sfondo: chiaro sul telefono (lo schermo vicino al viso lo illumina, la fotocamera amplifica
 // meno e i punti del viso sono meno rumorosi), scuro sul PC. Non si sceglie misurando la luce
@@ -80,9 +82,13 @@ let countdown = null;
 // e palpebra superiore quasi costanti). Soglia ricavata dalle registrazioni: con l'occhio
 // fermo la deviazione standard su 6 fotogrammi è ~0.001, durante uno spostamento 0.01–0.08.
 const STABLE_FRAMES = 6;
-const STABLE_SD = 0.005;
 const recent = [];
 const recentPoses = [];
+
+// Ultime posizioni stimate (prima dello scostamento), per "Ricentra" nelle modalità con la testa,
+// e scostamento applicato da "Ricentra": il collo si stanca e la posizione di riposo deriva.
+const rawPreds = [];
+let centerOffset = [0, 0];
 
 // ---------- ciclo per fotogramma ----------
 
@@ -103,7 +109,10 @@ tracker.onFrame = (f) => {
     filterY.reset();
   } else if (!f.blink) {
     // Durante un battito di ciglia l'iride non è visibile: si tiene l'ultima posizione.
-    const [nx, ny] = predict(model, f.features);
+    const [rx, ry] = predict(model, f.features);
+    rawPreds.push([rx, ry]);
+    if (rawPreds.length > 30) rawPreds.shift();
+    const nx = rx + centerOffset[0], ny = ry + centerOffset[1];
     const x = clamp(nx, -0.05, 1.05) * innerWidth;
     const y = clamp(ny, -0.05, 1.05) * innerHeight;
     gaze = { x: filterX.filter(x, f.t / 1000), y: filterY.filter(y, f.t / 1000) };
@@ -164,6 +173,8 @@ function watchEyesClosed(f) {
 
 // Postura cambiata rispetto all'ultima calibrazione: propone la ricalibrazione rapida.
 function watchPosture(f) {
+  // Con la testa che guida il puntatore, muoverla è il comando e non un disturbo da compensare.
+  if (settings.control !== "eyes") return;
   if (!f.face || f.blink || !model) return;
   const now = performance.now();
   if (posture.update(f.pose, f.t) && now - lastRecalAt > RECAL_MIN_INTERVAL_MS && now > snoozeUntil) {
@@ -205,17 +216,21 @@ function baseDevice() {
   return `${screen.width}x${screen.height}@${video.videoWidth}x${video.videoHeight}`;
 }
 
+// L'archivio delle calibrazioni dipende da dispositivo, orientamento e modalità di controllo
+// (le caratteristiche dei campioni sono diverse). Per gli occhi la chiave è quella delle versioni
+// precedenti, così le calibrazioni già fatte restano valide.
 function deviceKey() {
-  return `${baseDevice()}|${orientation()}`;
+  const base = `${baseDevice()}|${orientation()}`;
+  return settings.control === "eyes" ? base : `${base}|${settings.control}`;
 }
 
 function openPool() {
   const device = deviceKey();
   const key = `${POOL_KEY}:${device}`;
   // Archivi delle versioni precedenti (senza orientamento: un solo archivio sotto POOL_KEY, poi
-  // uno per dimensioni di schermo e video): valgono per l'orizzontale, quello del PC.
+  // uno per dimensioni di schermo e video): valgono per gli occhi in orizzontale, quello del PC.
   const previous = () => {
-    if (orientation() !== "orizzontale") return undefined;
+    if (orientation() !== "orizzontale" || settings.control !== "eyes") return undefined;
     const legacy = load(POOL_KEY);
     const old = load(`${POOL_KEY}:${baseDevice()}`) ?? (legacy?.device === baseDevice() ? legacy : undefined);
     return old ? { ...old, device } : undefined;
@@ -223,9 +238,50 @@ function openPool() {
   pool = new CalibrationPool(
     { load: () => load(key) ?? previous(), save: (data) => save(key, data) },
     device,
+    settings.control,
   );
   model = pool.train();
   posture.setBaseline(pool.lastPose);
+}
+
+// Cosa muove il puntatore: occhi, testa o entrambi. Cambiandolo cambiano le caratteristiche
+// dei campioni, quindi serve un'altra calibrazione (completa la prima volta, poi rapida).
+function setControl(next) {
+  if (!CONTROL_MODES.includes(next) || next === settings.control) return;
+  settings.control = next;
+  recent.length = 0;
+  recentPoses.length = 0;
+  rawPreds.length = 0;
+  centerOffset = [0, 0];
+  gaze = null;
+  filterX.reset();
+  filterY.reset();
+  applySettings();
+  if (!pool || MOUSE_MODE) return; // prima dell'avvio vale dall'avvio
+  openPool();
+  toast(model ? `Controllo con ${CONTROL_LABELS[next]}: ricalibrazione rapida` : `Controllo con ${CONTROL_LABELS[next]}: calibrazione completa`, 4000);
+  calibrate(model ? "quick" : "full");
+}
+
+// "Ricentra": la testa si stanca e la posizione di riposo deriva. Si punta il centro dello
+// schermo per qualche secondo e la posizione stimata si risposta lì. Durante il conto alla
+// rovescia le selezioni sono sospese (si sta puntando il centro, non una cella).
+const RECENTER_SECONDS = 3;
+function recenter() {
+  keyboard.showMain();
+  board.cooldownUntil = performance.now() + (RECENTER_SECONDS + 0.5) * 1000;
+  startCountdown(RECENTER_SECONDS, (n) => toast(`Punta il centro dello schermo… ${n}`, 1300), () => {
+    const last = rawPreds.slice(-15);
+    if (last.length < 5) {
+      toast("Non ho visto il viso: riprova", 3000);
+      return;
+    }
+    const mx = last.reduce((a, q) => a + q[0], 0) / last.length;
+    const my = last.reduce((a, q) => a + q[1], 0) / last.length;
+    centerOffset = [0.5 - mx, 0.5 - my];
+    toast("Ricentrato", 2000);
+  });
+  $("#center-mark").hidden = false;
 }
 
 addEventListener("resize", () => {
@@ -293,6 +349,7 @@ function startCountdown(seconds, onTick, onDone) {
 function stopCountdown() {
   clearInterval(countdown);
   countdown = null;
+  $("#center-mark").hidden = true;
 }
 
 function toast(text, ms = 3000) {
@@ -372,20 +429,9 @@ function showMenu() {
     { label: "Calibrazione\ncompleta", kind: "cmd", action: () => calibrate("full") },
     { label: `Fissazione\npiù lenta (ora ${seconds} s)`, kind: "cmd", action: () => { changeDwell(250); showMenu(); } },
     { label: `Fissazione\npiù veloce (ora ${seconds} s)`, kind: "cmd", action: () => { changeDwell(-250); showMenu(); } },
+    { label: `Controllo:\n${CONTROL_LABELS[settings.control]} ▸`, kind: "cmd", action: showControlMenu },
+    settings.control !== "eyes" ? { label: "Ricentra\n(punta il centro)", kind: "cmd", action: recenter } : null,
     { label: `Punto: ${settings.showDot ? "sì" : "no"}`, kind: "cmd", action: () => { toggleDot(); showMenu(); } },
-    { label: "Scrittura\ncontinua", kind: "cmd", action: startDasher },
-    { label: `Scrittura continua\npiù lenta (${settings.dasherSpeed.toFixed(1)})`, kind: "cmd", action: () => { changeDasherSpeed(-0.2); showMenu(); } },
-    { label: `Scrittura continua\npiù veloce (${settings.dasherSpeed.toFixed(1)})`, kind: "cmd", action: () => { changeDasherSpeed(0.2); showMenu(); } },
-    {
-      label: `Scrittura continua:\n${DASHER_LAYOUTS[settings.dasherLayout]}`,
-      kind: "cmd",
-      action: () => {
-        const order = Object.keys(DASHER_LAYOUTS);
-        settings.dasherLayout = order[(order.indexOf(settings.dasherLayout) + 1) % order.length];
-        applySettings();
-        showMenu();
-      },
-    },
     {
       label: `Sfondo:\n${BACKGROUNDS[settings.background]}`,
       kind: "cmd",
@@ -399,8 +445,47 @@ function showMenu() {
         if (lightBackground() !== wasLight && model) toast("Sfondo cambiato: conviene ricalibrare (Ricalibra 10 secondi)", 5000);
       },
     },
+    { label: "Scrittura\ncontinua", kind: "cmd", action: startDasher },
+    { label: "Scrittura continua:\nimpostazioni ▸", kind: "cmd", action: showDasherMenu },
   ];
   items[11] = { label: "Indietro", kind: "cmd", action: () => keyboard.showMain() };
+  board.setLayout(4, 3, items);
+}
+
+// Cosa muove il puntatore. Scegliere un'altra modalità avvia la calibrazione per quella modalità.
+function showControlMenu() {
+  const choice = (key, hint) => ({
+    label: `${key === settings.control ? "✓ " : ""}${CONTROL_LABELS[key]}`,
+    hint,
+    kind: key === settings.control ? "suggest" : "cmd",
+    action: () => (key === settings.control ? showMenu() : setControl(key)),
+  });
+  const items = [
+    choice("eyes", "il puntatore segue lo sguardo"),
+    choice("head", "come un puntatore sul naso"),
+    choice("both", "la testa muove, gli occhi rifiniscono"),
+  ];
+  items[11] = { label: "◂ Menu", kind: "cmd", action: showMenu };
+  board.setLayout(4, 3, items);
+}
+
+function showDasherMenu() {
+  const items = [
+    { label: `Scrittura continua\npiù lenta (${settings.dasherSpeed.toFixed(1)})`, kind: "cmd", action: () => { changeDasherSpeed(-0.2); showDasherMenu(); } },
+    { label: `Scrittura continua\npiù veloce (${settings.dasherSpeed.toFixed(1)})`, kind: "cmd", action: () => { changeDasherSpeed(0.2); showDasherMenu(); } },
+    {
+      label: `Disposizione:\n${DASHER_LAYOUTS[settings.dasherLayout]}`,
+      kind: "cmd",
+      action: () => {
+        const order = Object.keys(DASHER_LAYOUTS);
+        settings.dasherLayout = order[(order.indexOf(settings.dasherLayout) + 1) % order.length];
+        applySettings();
+        showDasherMenu();
+      },
+    },
+    { label: "Avvia scrittura\ncontinua", kind: "suggest", action: startDasher },
+  ];
+  items[11] = { label: "◂ Menu", kind: "cmd", action: showMenu };
   board.setLayout(4, 3, items);
 }
 
@@ -479,7 +564,8 @@ const sampler = {
   stop() { const s = collecting; collecting = null; return s; },
   stable() {
     if (recent.length < STABLE_FRAMES || recent.includes(null)) return false;
-    return [0, 2].every((j) => sd(recent.map((f) => f[j])) < STABLE_SD);
+    const { indices, sd: limit } = STABILITY[settings.control];
+    return indices.every((j) => sd(recent.map((f) => f[j])) < limit);
   },
 };
 
@@ -496,11 +582,15 @@ async function calibrate(kind = "full") {
   calibrator.aborted = false;
   show("calib");
   try {
-    await calibrator.intro(
-      quick ? "Ricalibrazione rapida: segui il punto con gli occhi."
-        : "Segui il punto rosso solo con gli occhi, tenendo la testa ferma. Quando diventa azzurro, fissalo.",
-      quick ? 2000 : 3000,
-    );
+    const intro = {
+      eyes: ["Ricalibrazione rapida: segui il punto con gli occhi.",
+        "Segui il punto rosso solo con gli occhi, tenendo la testa ferma. Quando diventa azzurro, fissalo."],
+      head: ["Ricalibrazione rapida: segui il punto muovendo la testa, come un puntatore sul naso.",
+        "Segui il punto rosso muovendo la testa, come se avessi un puntatore sul naso. Raggiungi anche gli angoli dello schermo. Quando diventa azzurro, resta fermo."],
+      both: ["Ricalibrazione rapida: segui il punto con gli occhi e con la testa insieme.",
+        "Segui il punto rosso con gli occhi e muovendo un po' la testa nella sua direzione, come farai usando Sguardo. Quando diventa azzurro, fissalo."],
+    }[settings.control];
+    await calibrator.intro(quick ? intro[0] : intro[1], settings.control === "eyes" ? (quick ? 2000 : 3000) : (quick ? 3000 : 5000));
     const calib = await calibrator.runPoints(quick ? QUICK_POINTS : CALIB_POINTS, sampler);
     const points = calib.fixations.map(({ point, samples }) => ({ point, samples: usable(samples) }));
     if (points.reduce((s, p) => s + p.samples.length, 0) < calib.fixations.length * 8) {
@@ -512,7 +602,7 @@ async function calibrate(kind = "full") {
     let validation = [];
     if (!quick) {
       // Errore misurato su punti che il modello non ha visto, con l'archivio pesato per postura.
-      const candidate = pool.train(points.map(({ point, samples }) => ({ point, samples: cleanSamples(samples) })), pose);
+      const candidate = pool.train(points.map(({ point, samples }) => ({ point, samples: cleanSamples(samples, CLEAN_INDICES[settings.control]) })), pose);
       calibrator.msg.textContent = "";
       validation = (await calibrator.runPoints(VALIDATION_POINTS, sampler)).fixations;
       stats = measureError(candidate, validation);
@@ -520,6 +610,7 @@ async function calibrate(kind = "full") {
       // peggiorano la stima: 99 -> 109–115 px), ma si salvano con "Salva dati" per analisi future.
       lastSession = {
         date: new Date().toISOString(),
+        control: settings.control,
         userAgent: navigator.userAgent,
         screen: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio },
         video: { w: video.videoWidth, h: video.videoHeight },
@@ -531,6 +622,7 @@ async function calibrate(kind = "full") {
 
     pool.add(kind, [...points, ...validation.map(({ point, samples }) => ({ point, samples: usable(samples) }))], pose);
     calibratedSize = { w: innerWidth, h: innerHeight };
+    centerOffset = [0, 0]; // la nuova calibrazione definisce il centro
     model = pool.train();
     posture.setBaseline(pose);
     lastRecalAt = performance.now();
@@ -922,6 +1014,8 @@ function applySettings() {
   board.dwellMs = resultBoard.dwellMs = promptBoard.dwellMs = settings.dwellMs;
   $("#dwell-value").textContent = `${(settings.dwellMs / 1000).toFixed(2).replace(/0$/, "")} s`;
   $("#btn-dot").textContent = `Punto: ${settings.showDot ? "sì" : "no"}`;
+  tracker.mode = settings.control;
+  for (const select of document.querySelectorAll("select.control-select")) select.value = settings.control;
   document.body.classList.toggle("light", lightBackground());
   if (dasher) dasher.light = lightBackground();
   save(SETTINGS_KEY, settings);
@@ -942,6 +1036,10 @@ $("#dwell-minus").addEventListener("click", () => changeDwell(-250));
 $("#dwell-plus").addEventListener("click", () => changeDwell(250));
 $("#btn-dot").addEventListener("click", toggleDot);
 $("#btn-calib").addEventListener("click", () => calibrate("full"));
+for (const select of document.querySelectorAll("select.control-select")) {
+  select.addEventListener("change", () => setControl(select.value));
+}
+if (MOUSE_MODE) for (const el of document.querySelectorAll(".control-pick, #control-toolbar")) el.hidden = true;
 $("#btn-last-result").addEventListener("click", () => {
   if (lastResult) showResult(lastResult, true);
   else toast("Nessuna calibrazione completa da quando hai aperto la pagina: premi Ricalibra.", 4000);

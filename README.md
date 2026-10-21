@@ -138,6 +138,32 @@ con gli occhi.
    cancellare). Dal menu si può passare alla versione verticale (lettere da destra).
 5. **Cambio di postura.** Se la testa resta spostata o inclinata per più di 3 secondi compare un
    avviso e dopo 5 secondi parte la ricalibrazione rapida. **Non ora** la rimanda di 3 minuti.
+   (Vale solo con il controllo a occhi: con la testa, muoverla è il comando.)
+
+### Controllo: occhi, testa o occhi + testa
+
+Cosa muove il puntatore si sceglie dalla schermata iniziale, dalla barra per chi assiste o dal menu
+con gli occhi (**Controllo**). Ogni modalità ha la sua calibrazione, la sua cartella di
+calibrazioni salvate e le sue istruzioni: cambiarla avvia una calibrazione (completa la prima volta,
+poi rapida).
+
+| Modalità | Il puntatore segue | Pensata per |
+|---|---|---|
+| **Occhi** (predefinita) | lo sguardo, con la testa ferma | chi non può muovere altro |
+| **Testa** | l'orientamento e la posizione del viso, come un puntatore sul naso | chi muove ancora la testa ma ha occhi stanchi o poco precisi |
+| **Occhi + testa** | la testa sposta in modo grossolano, gli occhi rifiniscono | chi ha un po' di entrambi |
+
+- Nella calibrazione il punto va seguito con la testa (o con occhi e testa insieme) e **vanno
+  raggiunti anche gli angoli dello schermo**: l'ampiezza del movimento è personale e la impara
+  da lì.
+- Con la testa la posizione di riposo deriva e il collo si stanca: **Ricentra** (menu) chiede di
+  puntare il centro dello schermo per 3 secondi e vi riporta la posizione stimata.
+- **Stato della verifica:** le modalità con la testa sono state provate solo con dati sintetici e
+  nell'interfaccia, non con persone che muovono la testa. Le registrazioni raccolte finora sono a
+  testa ferma, quindi `node tools/evaluate.mjs --modes` non dice nulla sulla modalità "testa" (368 px,
+  nessun movimento da cui imparare); mostra invece che aggiungere la posizione della testa agli
+  occhi, a testa ferma, non peggiora la stima (104 px contro 103 px dei soli occhi). Per misurarla
+  davvero servono calibrazioni fatte muovendo la testa, salvate con **Salva dati**.
 
 I battiti di ciglia normali non interrompono la fissazione, e nemmeno il tremolio dello sguardo:
 ogni cella accumula "prove" quando lo sguardo ci cade vicino e le perde lentamente quando non la
@@ -212,6 +238,8 @@ node tools/evaluate-drift.mjs    # errore dopo un cambio di postura
 node tools/test-posture.mjs      # controllo della postura e archivio
 node tools/test-predictor.mjs    # suggerimento delle parole
 node tools/test-calibration.mjs  # etichette dei dati raccolti con il punto in movimento
+node tools/test-modes.mjs        # modalità occhi / testa / occhi + testa, con dati sintetici
+node tools/evaluate.mjs --modes  # le tre modalità sulle stesse registrazioni
 node tools/simulate-dasher.mjs   # scrittura continua con uno sguardo simulato (errore ~100 px)
 node tools/simulate-dwell.mjs    # selezione delle celle con uno sguardo simulato, PC e telefono
 ```
@@ -224,7 +252,7 @@ registrazioni, non su una sola: tra una sessione e l'altra cambiano postura e lu
 | `index.html`, `css/style.css` | Pagina e stile |
 | `js/main.js` | Collega tutto: schermate, calibrazione, voce, impostazioni |
 | `js/tracker.js` | Fotocamera + MediaPipe Face Landmarker |
-| `js/features.js` | Caratteristiche dello sguardo: iride, palpebra, blendshape degli occhi, posa della testa |
+| `js/features.js` | Caratteristiche per ogni modalità di controllo: iride, palpebra, blendshape, posa della testa |
 | `js/regression.js` | Regressione ridge (pesata) dalle caratteristiche alla posizione sullo schermo |
 | `js/calibration.js` | Punti di calibrazione e verifica, punto che scivola, pulizia dei campioni |
 | `js/pool.js` | Archivio delle calibrazioni, pesato per somiglianza di postura |

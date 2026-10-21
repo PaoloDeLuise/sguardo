@@ -15,8 +15,35 @@ export const RAW_POINTS = [
   1, 6, 10, 152, 168, 234, 454,
 ];
 
+// Modalità di controllo del puntatore:
+// - "eyes": solo lo sguardo (la testa resta ferma, la sua posa compensa i piccoli spostamenti);
+// - "head": solo la testa, come un puntatore sul naso (orientamento e posizione del viso);
+// - "both": occhi e testa insieme: la testa sposta in modo grossolano, gli occhi rifiniscono.
+export const CONTROL_MODES = ["eyes", "head", "both"];
+export const CONTROL_LABELS = { eyes: "occhi", head: "testa", both: "occhi + testa" };
+
+// Come riconoscere che il puntatore è fermo (campioni di calibrazione): indici delle
+// caratteristiche e deviazione standard massima su pochi fotogrammi. Misure sulle registrazioni:
+// con l'occhio fermo la deviazione è ~0.001 (occhi) e ~0.002 (testa), in movimento molto di più.
+export const STABILITY = {
+  eyes: { indices: [0, 2], sd: 0.005 },
+  head: { indices: [0, 1], sd: 0.004 },
+  both: { indices: [0, 2], sd: 0.005 },
+};
+
+// Caratteristiche usate per scartare i campioni anomali di un punto di calibrazione.
+export const CLEAN_INDICES = { eyes: [0, 2, 3], head: [0, 1], both: [0, 2, 3] };
+
 // P(i) -> {x, y} in pixel; bs: blendshape per nome; m: matrice 4x4 column-major (o null).
-export function gazeFeatures(P, bs, m) {
+// La matrice è la posa del viso: m[8], m[9] sono la direzione verso cui guarda il viso (rotazione
+// destra-sinistra e su-giù), m[12], m[13] la posizione del viso rispetto alla fotocamera.
+export function gazeFeatures(P, bs, m, mode = "eyes") {
+  if (mode === "head") return m ? [m[8], m[9], m[12], m[13]] : [0, 0, 0, 0];
+  const eyes = eyeGazeFeatures(P, bs, m);
+  return mode === "both" ? [...eyes, m ? m[12] : 0, m ? m[13] : 0] : eyes;
+}
+
+function eyeGazeFeatures(P, bs, m) {
   const r = eyeFeatures(P, RIGHT_EYE);
   const l = eyeFeatures(P, LEFT_EYE);
   const b = (name) => bs[name] ?? 0;
