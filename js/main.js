@@ -25,6 +25,8 @@ const RECAL_MIN_INTERVAL_MS = 60_000; // non riproporre la ricalibrazione troppo
 const SNOOZE_MS = 180_000;            // dopo "Non ora"
 const PROMPT_SECONDS = 5;             // conto alla rovescia prima della ricalibrazione rapida
 const RESULT_AUTO_SECONDS = 10;       // dopo la calibrazione si prosegue da soli
+const WINK_MS = 150;                  // occhiolino: quanto deve durare per contare (un battito normale è più breve e con due occhi)
+const PEN_MODES = { wink: "occhiolino", still: "da fermo" };
 const RESULT_GRACE_MS = 3000;         // all'apertura del risultato le celle non scelgono: lo sguardo è ancora dov'era
 
 // ?mouse nell'indirizzo: il mouse fa le veci dello sguardo (per provare la tastiera senza calibrare).
@@ -49,7 +51,7 @@ const filterY = new OneEuro();
 // dasherLayout: "auto" mette le lettere sul lato lungo dello schermo (orizzontale su PC e telefono
 // girato, verticale su telefono in verticale): nel simulatore (tools/simulate-dasher.mjs) lettere
 // più grandi danno il 92% di frasi completate contro il 62%, con il 75% di cancellazioni in meno.
-const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", background: "auto", control: "eyes", drawGapMs: 2000, penStillMs: 700, ...load(SETTINGS_KEY) };
+const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", background: "auto", control: "eyes", drawGapMs: 2000, penStillMs: 700, penMode: "wink", ...load(SETTINGS_KEY) };
 if (!CONTROL_MODES.includes(settings.control)) settings.control = "eyes";
 
 // Sfondo: chiaro sul telefono (lo schermo vicino al viso lo illumina, la fotocamera amplifica
@@ -72,6 +74,8 @@ let dasher = null;
 let drawPad = null;
 let drawModel = null;     // probabilità delle lettere, per aiutare il riconoscimento
 let drawLexicon = null;   // parole del dizionario per lunghezza, per leggere le parole disegnate
+let winkSince = null;     // inizio dell'occhiolino in corso
+let winkHandled = false;  // la penna è già cambiata per questo occhiolino
 let drawLast = null;      // ultimo disegno: { letters, kind, before, suffix, alternatives }
 const drawPersonal = load(DRAW_KEY) ?? {}; // lettere insegnate scegliendo tra le alternative
 let eyesClosed = false;
@@ -117,8 +121,9 @@ tracker.onFrame = (f) => {
     gaze = null;
     filterX.reset();
     filterY.reset();
-  } else if (!f.blink) {
-    // Durante un battito di ciglia l'iride non è visibile: si tiene l'ultima posizione.
+  } else if (!f.blink && !(mode === "draw" && f.wink)) {
+    // Durante un battito di ciglia l'iride non è visibile: si tiene l'ultima posizione. Lo stesso
+    // durante un occhiolino nella scrittura a mano, così la penna cambia dove era il puntatore.
     const [rx, ry] = predict(model, f.features);
     rawPreds.push([rx, ry]);
     if (rawPreds.length > 30) rawPreds.shift();
@@ -136,6 +141,7 @@ tracker.onFrame = (f) => {
     watchEyesClosed(f);
     watchPosture(f);
   }
+  if (mode === "draw") watchWink(f);
 };
 
 function activeBoard() {
@@ -179,6 +185,21 @@ function watchEyesClosed(f) {
   if (!menuOpenedByEyes && f.t - eyesClosedSince >= MENU_EYES_CLOSED_MS) {
     menuOpenedByEyes = true;
     showMenu();
+  }
+}
+
+// Scrittura a mano con l'occhiolino: tenuto per WINK_MS, abbassa o alza la penna (una volta sola
+// per occhiolino; per cambiare ancora serve riaprire l'occhio).
+function watchWink(f) {
+  if (settings.penMode !== "wink" || !f.face || !f.wink) {
+    winkSince = null;
+    winkHandled = false;
+    return;
+  }
+  winkSince ??= f.t;
+  if (!winkHandled && f.t - winkSince >= WINK_MS) {
+    winkHandled = true;
+    drawPad?.togglePen(f.t);
   }
 }
 
@@ -345,6 +366,8 @@ function show(name) {
   // Nella scrittura continua e a mano la barra in alto si nasconde: più spazio per le lettere.
   $("#toolbar").hidden = ["start", "calib", "prompt", "dasher", "draw"].includes(name);
   for (const b of [board, resultBoard, promptBoard, drawBoard]) b.reset();
+  winkSince = null;
+  winkHandled = false;
   if (name !== "draw") dot.classList.remove("pen");
   renderDot();
 }
@@ -514,6 +537,7 @@ function showDrawMenu() {
   const taught = Object.values(drawPersonal).reduce((n, list) => n + list.length, 0);
   const items = [
     { label: "Avvia scrittura\na mano", kind: "suggest", action: startDraw },
+    { label: `Penna: ${PEN_MODES[settings.penMode]}`, hint: "occhiolino oppure fermo un attimo", kind: "cmd", action: () => { settings.penMode = settings.penMode === "wink" ? "still" : "wink"; if (drawPad) drawPad.penMode = settings.penMode; applySettings(); showDrawMenu(); } },
     { label: `Pausa tra i disegni\npiù breve (ora ${gap} s)`, kind: "cmd", action: () => { changeDraw("drawGapMs", -500, 1000, 5000); showDrawMenu(); } },
     { label: `Pausa tra i disegni\npiù lunga (ora ${gap} s)`, kind: "cmd", action: () => { changeDraw("drawGapMs", 500, 1000, 5000); showDrawMenu(); } },
     { label: `Penna: attesa da fermo\npiù breve (ora ${still} s)`, kind: "cmd", action: () => { changeDraw("penStillMs", -100, 400, 1500); showDrawMenu(); } },
@@ -544,6 +568,7 @@ function startDraw() {
   });
   drawPad.gapMs = settings.drawGapMs;
   drawPad.stillMs = settings.penStillMs;
+  drawPad.penMode = settings.penMode;
   drawPad.light = lightBackground();
   drawPad.pointerPens = MOUSE_MODE;
   showDrawCells();

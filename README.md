@@ -139,12 +139,17 @@ con gli occhi.
 5. **Scrittura a mano** (menu → *Scrittura a mano*, o **Scrivi a mano** nella barra, o il tasto `H`):
    il puntatore disegna una lettera o una parola intera. Pensata per la modalità con la testa, ma
    vale per tutte. Si attiva solo quando la si sceglie: non cambia nulla per chi usa la tastiera.
-   - **Penna:** un puntatore non ha pulsante, quindi **si sta fermi** per circa 0,7 secondi (un
-     cerchio si riempie attorno al puntatore) per abbassare la penna, e di nuovo per alzarla. Il
-     tratto parte esattamente da dove il puntatore era fermo. Dopo ogni cambio bisogna muoversi
-     prima di poter cambiare ancora, quindi restare fermi a penna alzata per finire non scrive
-     niente. A penna alzata il puntatore si muove senza lasciare segno; uscendo dall'area di
-     disegno la penna si alza da sola. L'attesa si regola nel menu.
+   - **Penna:** un puntatore non ha pulsante, quindi la penna si abbassa e si alza in uno di due
+     modi, a scelta nel menu (*Scrittura a mano* → *Penna*):
+     - **occhiolino** (predefinito): un occhio chiuso per un istante (circa 0,15 s) abbassa la
+       penna, un altro la alza. Un battito normale, con tutti e due gli occhi, non conta. Mentre
+       dura l'occhiolino il puntatore resta fermo, quindi il tratto parte da dove era;
+     - **da fermo**: si sta fermi per circa 0,7 secondi (un cerchio si riempie attorno al
+       puntatore). Dopo ogni cambio bisogna muoversi prima di poter cambiare ancora, quindi
+       restare fermi a penna alzata per finire non scrive niente. L'attesa si regola nel menu.
+
+     A penna alzata il puntatore si muove senza lasciare segno; uscendo dall'area di disegno la
+     penna si alza da sola.
    - **Lettera o parola:** si scrivono **lettere staccate in fila da sinistra a destra**. Le lettere
      si separano da sole dalla posizione (la barra della E o il puntino della I restano con la
      loro lettera), in qualunque ordine di tratti. Una lettera sola si aggiunge alla parola in

@@ -1,13 +1,15 @@
 // Scrittura a mano: il puntatore (testa, occhi o entrambi) disegna una lettera o una parola.
 //
-// Un puntatore non ha "pulsante": la penna si abbassa e si alza stando fermi.
-// - ferma per `stillMs` (un cerchio si riempie attorno al puntatore): la penna cambia stato.
-//   Nel momento del cambio il puntatore è fermo, quindi il tratto parte esattamente da lì;
+// Un puntatore non ha "pulsante": la penna si abbassa e si alza in uno di due modi (penMode):
+// - "wink": con un occhiolino (main.js chiama togglePen; il puntatore resta fermo mentre dura,
+//   quindi il tratto parte da dove era);
+// - "still": stando fermi per `stillMs` (un cerchio si riempie attorno al puntatore). Nel momento
+//   del cambio il puntatore è fermo, quindi il tratto parte esattamente da lì;
 // - penna abbassata: ogni fotogramma aggiunge un punto al tratto;
 // - penna alzata: il puntatore si muove senza lasciare traccia (per raggiungere il tratto dopo);
 // - penna alzata per `gapMs` dopo l'ultimo tratto: il disegno è finito e si riconosce.
-// Dopo ogni cambio bisogna muoversi prima di poter cambiare ancora: restare fermi a penna alzata
-// per finire non abbassa di nuovo la penna. Se il puntatore esce dall'area la penna si alza.
+// In "still", dopo ogni cambio bisogna muoversi prima di poter cambiare ancora: restare fermi a
+// penna alzata per finire non abbassa di nuovo la penna. Se il puntatore esce dall'area la penna si alza.
 // Con il mouse (?mouse nell'indirizzo) o il dito: tenere premuto abbassa la penna.
 
 const MIN_POINT_GAP_PX = 2;  // punti più vicini di così non aggiungono nulla
@@ -27,6 +29,7 @@ export class DrawPad {
     Object.assign(this, { getGaze, isPaused, onDrawing, onPen });
     this.gapMs = 2000;
     this.stillMs = 700;
+    this.penMode = "wink";
     this.palette = PALETTES.dark;
     this.running = false;
     this.pointerPens = false;
@@ -83,6 +86,8 @@ export class DrawPad {
     return Math.max(14, Math.min(this.rect.width, this.rect.height) * 0.025);
   }
 
+  togglePen(t = performance.now()) { this.setPen(!this.pen, t); }
+
   setPen(down, t = performance.now()) {
     if (down === this.pen) return;
     this.pen = down;
@@ -113,7 +118,7 @@ export class DrawPad {
         const last = stroke.at(-1);
         if (!last || Math.hypot(c.x - last[0], c.y - last[1]) >= MIN_POINT_GAP_PX) stroke.push([c.x, c.y]);
       }
-      if (!this.pointerPens) this.watchStill(c, t);
+      if (!this.pointerPens && this.penMode === "still") this.watchStill(c, t);
     }
 
     if (!this.pen && this.strokes.length && t - this.penUpAt >= this.gapMs) this.finish();
@@ -194,8 +199,9 @@ export class DrawPad {
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillStyle = this.pen ? p.ink : p.penUp;
-    const how = this.pointerPens ? "tieni premuto" : "fermo un attimo";
-    ctx.fillText(this.pen ? `✎ penna abbassata: disegna (${this.pointerPens ? "rilascia" : "fermo un attimo"} per alzarla)` : `✎ penna alzata: ${how} per scrivere`, 16, 14);
+    const how = this.pointerPens ? "tieni premuto" : this.penMode === "wink" ? "fai un occhiolino" : "fermo un attimo";
+    const up = this.pointerPens ? "rilascia" : this.penMode === "wink" ? "occhiolino" : "fermo un attimo";
+    ctx.fillText(this.pen ? `✎ penna abbassata: disegna (${up} per alzarla)` : `✎ penna alzata: ${how} per scrivere`, 16, 14);
     if (!this.pen && this.strokes.length) {
       const left = Math.max(0, 1 - (now - this.penUpAt) / this.gapMs);
       ctx.fillStyle = p.frame;

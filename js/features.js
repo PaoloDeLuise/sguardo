@@ -34,6 +34,14 @@ export const STABILITY = {
 // Caratteristiche usate per scartare i campioni anomali di un punto di calibrazione.
 export const CLEAN_INDICES = { eyes: [0, 2, 3], head: [0, 1], both: [0, 2, 3] };
 
+// Occhi chiusi: battito (entrambi) oppure occhiolino (uno solo). Un occhiolino con l'occhio molto
+// chiuso fa salire anche la media dei due, quindi non conta come battito.
+export function eyeState(bs) {
+  const l = bs.eyeBlinkLeft ?? 0, r = bs.eyeBlinkRight ?? 0;
+  const wink = (l > 0.6 && r < 0.35) || (r > 0.6 && l < 0.35);
+  return { wink, blink: !wink && (l + r) / 2 > 0.6 };
+}
+
 // P(i) -> {x, y} in pixel; bs: blendshape per nome; m: matrice 4x4 column-major (o null).
 // La matrice è la posa del viso: m[8], m[9] sono la direzione verso cui guarda il viso (rotazione
 // destra-sinistra e su-giù), m[12], m[13] la posizione del viso rispetto alla fotocamera.

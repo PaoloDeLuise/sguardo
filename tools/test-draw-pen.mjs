@@ -3,6 +3,7 @@
 // Niente fotocamera né pagina: un finto canvas e un puntatore che si muove a comando.
 import assert from "node:assert/strict";
 import { DrawPad } from "../js/draw.js";
+import { eyeState } from "../js/features.js";
 
 const canvas = {
   addEventListener() {},
@@ -15,6 +16,7 @@ const pad = new DrawPad(canvas, { getGaze: () => gaze, isPaused: () => false, on
 pad.rect = canvas.getBoundingClientRect();
 pad.gapMs = 2000;
 pad.stillMs = 700;
+pad.penMode = "still";
 
 let t = 1000;
 const FRAME = 33;
@@ -75,5 +77,24 @@ rest(200, 100, 900);
 assert.equal(pad.pen, true);
 move(900, 100, 200);
 assert.equal(pad.pen, false, "uscendo dall'area la penna si alza");
+
+// 7) Occhiolino: da fermo la penna non cambia più; togglePen la abbassa e la alza.
+pad.penMode = "wink";
+rest(300, 300, 1500);
+assert.equal(pad.pen, false, "in modalità occhiolino stare fermi non abbassa la penna");
+pad.togglePen(t);
+assert.equal(pad.pen, true, "l'occhiolino abbassa la penna");
+const first = pad.strokes.at(-1)[0];
+assert.ok(Math.hypot(first[0] - 300, first[1] - 300) < 6, "il tratto parte dal puntatore");
+pad.togglePen(t);
+assert.equal(pad.pen, false, "e la rialza");
+
+// 8) Occhiolino o battito? Uno solo chiuso è occhiolino, anche con l'occhio molto chiuso.
+assert.deepEqual(eyeState({ eyeBlinkLeft: 0.9, eyeBlinkRight: 0.1 }), { wink: true, blink: false });
+assert.deepEqual(eyeState({ eyeBlinkLeft: 1, eyeBlinkRight: 0.25 }), { wink: true, blink: false }, "la media supera 0,6 ma è un occhiolino");
+assert.deepEqual(eyeState({ eyeBlinkLeft: 0.1, eyeBlinkRight: 0.8 }), { wink: true, blink: false }, "vale con entrambi gli occhi");
+assert.deepEqual(eyeState({ eyeBlinkLeft: 0.8, eyeBlinkRight: 0.9 }), { wink: false, blink: true });
+assert.deepEqual(eyeState({ eyeBlinkLeft: 0.2, eyeBlinkRight: 0.1 }), { wink: false, blink: false });
+assert.deepEqual(eyeState({ eyeBlinkLeft: 0.5, eyeBlinkRight: 0.5 }), { wink: false, blink: false }, "a metà non è niente");
 
 console.log("ok");
