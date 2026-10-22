@@ -82,12 +82,41 @@ assert.equal(pad.pen, false, "uscendo dall'area la penna si alza");
 pad.penMode = "wink";
 rest(300, 300, 1500);
 assert.equal(pad.pen, false, "in modalità occhiolino stare fermi non abbassa la penna");
+pad.startDelayMs = 800;
+const strokesBefore = pad.strokes.length;
 pad.togglePen(t);
-assert.equal(pad.pen, true, "l'occhiolino abbassa la penna");
+assert.equal(pad.pen, false, "l'occhiolino non abbassa la penna all'istante");
+assert.equal(pad.arming, true, "comincia la preparazione (puntatore fantasma)");
+rest(300, 300, 400);
+assert.equal(pad.pen, false, "a metà preparazione la penna è ancora su");
+assert.equal(pad.strokes.length, strokesBefore, "e nessun segno");
+// durante la preparazione ci si posiziona meglio: il tratto parte da dove si arriva, non dal punto dell'occhiolino
+move(380, 340, 300);
+rest(380, 340, 400);
+assert.equal(pad.pen, true, "finita la preparazione la penna scende");
 const first = pad.strokes.at(-1)[0];
-assert.ok(Math.hypot(first[0] - 300, first[1] - 300) < 6, "il tratto parte dal puntatore");
+assert.ok(Math.hypot(first[0] - 380, first[1] - 340) < 6, "il tratto parte dal puntatore dopo l'assestamento");
 pad.togglePen(t);
-assert.equal(pad.pen, false, "e la rialza");
+assert.equal(pad.pen, false, "alzare la penna con l'occhiolino vale subito");
+
+// Un secondo occhiolino durante la preparazione la annulla.
+rest(300, 300, 300);
+pad.togglePen(t);
+rest(300, 300, 300);
+pad.togglePen(t);
+assert.equal(pad.arming, false, "il secondo occhiolino annulla la preparazione");
+rest(300, 300, 1200);
+assert.equal(pad.pen, false, "annullata: la penna non scende");
+
+// Durante la preparazione il disegno già fatto non si chiude per la pausa.
+pad.strokes = [[[0, 0], [50, 50]]];
+pad.penUpAt = t;
+const before = finished.length;
+pad.togglePen(t);
+rest(300, 300, 700);
+assert.equal(finished.length, before, "la pausa tra i disegni non scatta mentre ci si prepara");
+pad.togglePen(t);
+pad.strokes = [];
 
 // 8) Occhiolino o battito? Uno solo chiuso è occhiolino, anche con l'occhio molto chiuso.
 assert.deepEqual(eyeState({ eyeBlinkLeft: 0.9, eyeBlinkRight: 0.1 }), { wink: true, blink: false });

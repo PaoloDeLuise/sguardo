@@ -141,9 +141,12 @@ con gli occhi.
    vale per tutte. Si attiva solo quando la si sceglie: non cambia nulla per chi usa la tastiera.
    - **Penna:** un puntatore non ha pulsante, quindi la penna si abbassa e si alza in uno di due
      modi, a scelta nel menu (*Scrittura a mano* → *Penna*):
-     - **occhiolino** (predefinito): un occhio chiuso per un istante (circa 0,15 s) abbassa la
-       penna, un altro la alza. Un battito normale, con tutti e due gli occhi, non conta. Mentre
-       dura l'occhiolino il puntatore resta fermo, quindi il tratto parte da dove era;
+     - **occhiolino** (predefinito): un occhio chiuso per un istante (circa 0,15 s). Se la penna
+       è alzata comincia una **preparazione** (0,8 s, regolabile nel menu): sul disegno compare un
+       puntatore fantasma con un cerchio che si riempie, ci si posiziona con calma e la penna
+       scende alla fine, dove si trova il puntatore. Un altro occhiolino durante la preparazione
+       annulla. Se la penna è giù, l'occhiolino la alza subito. Un battito normale, con tutti e
+       due gli occhi, non conta;
      - **da fermo**: si sta fermi per circa 0,7 secondi (un cerchio si riempie attorno al
        puntatore). Dopo ogni cambio bisogna muoversi prima di poter cambiare ancora, quindi
        restare fermi a penna alzata per finire non scrive niente. L'attesa si regola nel menu.

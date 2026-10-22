@@ -51,7 +51,7 @@ const filterY = new OneEuro();
 // dasherLayout: "auto" mette le lettere sul lato lungo dello schermo (orizzontale su PC e telefono
 // girato, verticale su telefono in verticale): nel simulatore (tools/simulate-dasher.mjs) lettere
 // più grandi danno il 92% di frasi completate contro il 62%, con il 75% di cancellazioni in meno.
-const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", background: "auto", control: "eyes", drawGapMs: 2000, penStillMs: 700, penMode: "wink", ...load(SETTINGS_KEY) };
+const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", background: "auto", control: "eyes", drawGapMs: 2000, penStillMs: 700, penMode: "wink", penDelayMs: 800, ...load(SETTINGS_KEY) };
 if (!CONTROL_MODES.includes(settings.control)) settings.control = "eyes";
 
 // Sfondo: chiaro sul telefono (lo schermo vicino al viso lo illumina, la fotocamera amplifica
@@ -534,14 +534,21 @@ function showDasherMenu() {
 function showDrawMenu() {
   const gap = (settings.drawGapMs / 1000).toFixed(1);
   const still = (settings.penStillMs / 1000).toFixed(1);
+  const delay = (settings.penDelayMs / 1000).toFixed(1);
+  // Il tempo della penna dipende dal modo: preparazione dopo l'occhiolino, oppure attesa da fermo.
+  const wink = settings.penMode === "wink";
   const taught = Object.values(drawPersonal).reduce((n, list) => n + list.length, 0);
   const items = [
     { label: "Avvia scrittura\na mano", kind: "suggest", action: startDraw },
     { label: `Penna: ${PEN_MODES[settings.penMode]}`, hint: "occhiolino oppure fermo un attimo", kind: "cmd", action: () => { settings.penMode = settings.penMode === "wink" ? "still" : "wink"; if (drawPad) drawPad.penMode = settings.penMode; applySettings(); showDrawMenu(); } },
     { label: `Pausa tra i disegni\npiù breve (ora ${gap} s)`, kind: "cmd", action: () => { changeDraw("drawGapMs", -500, 1000, 5000); showDrawMenu(); } },
     { label: `Pausa tra i disegni\npiù lunga (ora ${gap} s)`, kind: "cmd", action: () => { changeDraw("drawGapMs", 500, 1000, 5000); showDrawMenu(); } },
-    { label: `Penna: attesa da fermo\npiù breve (ora ${still} s)`, kind: "cmd", action: () => { changeDraw("penStillMs", -100, 400, 1500); showDrawMenu(); } },
-    { label: `Penna: attesa da fermo\npiù lunga (ora ${still} s)`, kind: "cmd", action: () => { changeDraw("penStillMs", 100, 400, 1500); showDrawMenu(); } },
+    wink
+      ? { label: `Preparazione dopo\nl'occhiolino: più breve (${delay} s)`, kind: "cmd", action: () => { changeDraw("penDelayMs", -100, 200, 2000); showDrawMenu(); } }
+      : { label: `Penna: attesa da fermo\npiù breve (ora ${still} s)`, kind: "cmd", action: () => { changeDraw("penStillMs", -100, 400, 1500); showDrawMenu(); } },
+    wink
+      ? { label: `Preparazione dopo\nl'occhiolino: più lunga (${delay} s)`, kind: "cmd", action: () => { changeDraw("penDelayMs", 100, 200, 2000); showDrawMenu(); } }
+      : { label: `Penna: attesa da fermo\npiù lunga (ora ${still} s)`, kind: "cmd", action: () => { changeDraw("penStillMs", 100, 400, 1500); showDrawMenu(); } },
     taught ? { label: `Dimentica le lettere\nimparate (${taught})`, kind: "cmd remove", action: () => { for (const k of Object.keys(drawPersonal)) delete drawPersonal[k]; save(DRAW_KEY, drawPersonal); showDrawMenu(); } } : null,
   ];
   items[11] = { label: "◂ Menu", kind: "cmd", action: showMenu };
@@ -550,7 +557,7 @@ function showDrawMenu() {
 
 function changeDraw(key, delta, lo, hi) {
   settings[key] = clamp(settings[key] + delta, lo, hi);
-  if (drawPad) { drawPad.gapMs = settings.drawGapMs; drawPad.stillMs = settings.penStillMs; }
+  if (drawPad) { drawPad.gapMs = settings.drawGapMs; drawPad.stillMs = settings.penStillMs; drawPad.startDelayMs = settings.penDelayMs; }
   applySettings();
 }
 
@@ -568,6 +575,7 @@ function startDraw() {
   });
   drawPad.gapMs = settings.drawGapMs;
   drawPad.stillMs = settings.penStillMs;
+  drawPad.startDelayMs = settings.penDelayMs;
   drawPad.penMode = settings.penMode;
   drawPad.light = lightBackground();
   drawPad.pointerPens = MOUSE_MODE;

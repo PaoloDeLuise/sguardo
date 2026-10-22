@@ -1,8 +1,11 @@
 // Scrittura a mano: il puntatore (testa, occhi o entrambi) disegna una lettera o una parola.
 //
 // Un puntatore non ha "pulsante": la penna si abbassa e si alza in uno di due modi (penMode):
-// - "wink": con un occhiolino (main.js chiama togglePen; il puntatore resta fermo mentre dura,
-//   quindi il tratto parte da dove era);
+// - "wink": con un occhiolino (main.js chiama togglePen). Per abbassare la penna non basta un
+//   istante: dopo l'occhiolino c'è una preparazione di `startDelayMs` in cui un puntatore
+//   "fantasma" mostra dove partirà il tratto, e ci si può posizionare meglio; la penna scende
+//   alla fine, dove si trova il puntatore. Un altro occhiolino durante la preparazione annulla.
+//   Per alzare la penna l'occhiolino vale subito;
 // - "still": stando fermi per `stillMs` (un cerchio si riempie attorno al puntatore). Nel momento
 //   del cambio il puntatore è fermo, quindi il tratto parte esattamente da lì;
 // - penna abbassata: ogni fotogramma aggiunge un punto al tratto;
@@ -29,6 +32,7 @@ export class DrawPad {
     Object.assign(this, { getGaze, isPaused, onDrawing, onPen });
     this.gapMs = 2000;
     this.stillMs = 700;
+    this.startDelayMs = 800;
     this.penMode = "wink";
     this.palette = PALETTES.dark;
     this.running = false;
@@ -49,6 +53,8 @@ export class DrawPad {
     this.stillSince = 0;
     this.armed = true;   // dopo un cambio di penna serve un movimento prima del successivo
     this.progress = 0;
+    this.arming = false; // preparazione dell'abbassamento (occhiolino): ancora nessun segno
+    this.armedAt = 0;
     this.flashUntil = 0;
     this.flashText = "";
     this.cursor = null;
@@ -86,7 +92,19 @@ export class DrawPad {
     return Math.max(14, Math.min(this.rect.width, this.rect.height) * 0.025);
   }
 
-  togglePen(t = performance.now()) { this.setPen(!this.pen, t); }
+  // Occhiolino: alza la penna subito; a penna alzata comincia (o annulla) la preparazione.
+  togglePen(t = performance.now()) {
+    if (this.pen) return this.setPen(false, t);
+    if (this.arming) {
+      this.arming = false;
+      this.progress = 0;
+      this.penUpAt = t;
+    } else if (this.cursor) {
+      this.arming = true;
+      this.armedAt = t;
+      this.progress = 0;
+    }
+  }
 
   setPen(down, t = performance.now()) {
     if (down === this.pen) return;
@@ -107,6 +125,10 @@ export class DrawPad {
     const inside = g && g.x >= r.left && g.x <= r.right && g.y >= r.top && g.y <= r.bottom;
     this.cursor = inside ? { x: g.x - r.left, y: g.y - r.top } : null;
     if (!inside && this.pen) this.setPen(false, t);
+    if (!inside && this.arming) {
+      this.arming = false;
+      this.penUpAt = t;
+    }
 
     const c = this.cursor;
     if (!c || this.isPaused()) {
@@ -119,9 +141,18 @@ export class DrawPad {
         if (!last || Math.hypot(c.x - last[0], c.y - last[1]) >= MIN_POINT_GAP_PX) stroke.push([c.x, c.y]);
       }
       if (!this.pointerPens && this.penMode === "still") this.watchStill(c, t);
+      if (this.arming) {
+        this.progress = (t - this.armedAt) / this.startDelayMs;
+        if (this.progress >= 1) {
+          this.arming = false;
+          this.progress = 0;
+          this.setPen(true, t); // parte dal puntatore com'è adesso, non da com'era all'occhiolino
+        }
+      }
     }
 
-    if (!this.pen && this.strokes.length && t - this.penUpAt >= this.gapMs) this.finish();
+    // Durante la preparazione il disegno non si chiude: si sta per aggiungere un tratto.
+    if (!this.pen && !this.arming && this.strokes.length && t - this.penUpAt >= this.gapMs) this.finish();
   }
 
   // Fermo abbastanza a lungo: la penna cambia stato.
@@ -185,8 +216,29 @@ export class DrawPad {
       ctx.stroke();
     }
 
+    // Preparazione: puntatore fantasma (dove partirà il tratto) con un cerchio che si riempie.
+    if (this.arming && this.cursor) {
+      const { x, y } = this.cursor;
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = p.ink;
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(5, Math.min(W, H) * 0.014) / 2 + 3, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = p.ink;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - 22, y); ctx.lineTo(x + 22, y);
+      ctx.moveTo(x, y - 22); ctx.lineTo(x, y + 22);
+      ctx.stroke();
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(x, y, 30, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, this.progress));
+      ctx.stroke();
+    }
+
     // Cerchio che si riempie attorno al puntatore mentre sta fermo.
-    if (this.cursor && this.progress > 0.12) {
+    if (!this.arming && this.cursor && this.progress > 0.12) {
       ctx.strokeStyle = this.pen ? p.penUp : p.ink;
       ctx.lineWidth = 6;
       ctx.beginPath();
@@ -201,14 +253,15 @@ export class DrawPad {
     ctx.fillStyle = this.pen ? p.ink : p.penUp;
     const how = this.pointerPens ? "tieni premuto" : this.penMode === "wink" ? "fai un occhiolino" : "fermo un attimo";
     const up = this.pointerPens ? "rilascia" : this.penMode === "wink" ? "occhiolino" : "fermo un attimo";
-    ctx.fillText(this.pen ? `✎ penna abbassata: disegna (${up} per alzarla)` : `✎ penna alzata: ${how} per scrivere`, 16, 14);
-    if (!this.pen && this.strokes.length) {
+    ctx.fillText(this.arming ? "✎ posizionati: la penna sta per scendere (occhiolino per annullare)"
+      : this.pen ? `✎ penna abbassata: disegna (${up} per alzarla)` : `✎ penna alzata: ${how} per scrivere`, 16, 14);
+    if (!this.pen && !this.arming && this.strokes.length) {
       const left = Math.max(0, 1 - (now - this.penUpAt) / this.gapMs);
       ctx.fillStyle = p.frame;
       ctx.fillRect(16, 46, W - 32, 6);
       ctx.fillStyle = p.penUp;
       ctx.fillRect(16, 46, (W - 32) * left, 6);
-    } else if (!this.strokes.length && !this.pen) {
+    } else if (!this.strokes.length && !this.pen && !this.arming) {
       ctx.fillStyle = p.text;
       ctx.fillText("Una lettera, oppure una parola: lettere in fila da sinistra a destra.", 16, 46);
     }
