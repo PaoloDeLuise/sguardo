@@ -1,26 +1,24 @@
 // Scrittura a mano: il puntatore (testa, occhi o entrambi) disegna una lettera o una parola.
 //
-// Un puntatore non ha "pulsante": la penna si abbassa e si alza in uno di due modi (penMode):
-// - un gesto (occhiolino, bocca aperta, inclinazione della testa: gestures.js, main.js chiama
-//   togglePen). Per abbassare la penna non basta un istante: dopo il gesto c'è una preparazione
-//   di `startDelayMs` in cui un puntatore "fantasma" mostra dove partirà il tratto, e ci si può
-//   posizionare meglio; la penna scende alla fine, dove si trova il puntatore. Un altro gesto
-//   durante la preparazione annulla. Per alzare la penna il gesto vale subito;
-// In ogni modo la penna si alza anche stando fermi (`stillMs`, con lo stesso cerchio): non serve
-// nessun gesto e il puntatore non si muove, quindi non c'è niente da togliere dal tratto.
-// Alzando la penna con un gesto o uscendo dall'area si tolgono dal tratto i punti che il gesto o l'uscita hanno disegnato senza
-// volerlo: con un gesto, quelli da quando il gesto è cominciato; uscendo dall'area (per esempio
-// verso la cella "Penna"), il percorso di uscita, tornando all'ultima pausa a fine tratto.
-// - "cell": una cella "Penna" accanto al disegno (requestPen). La preparazione parte da quando
-//   il puntatore rientra nell'area di disegno, non da quando si è scelta la cella; uscendo
-//   dall'area la penna si alza e, se la preparazione era in corso, si torna ad aspettare il rientro;
-// - "still": stando fermi per `stillMs` (un cerchio si riempie attorno al puntatore). Nel momento
-//   del cambio il puntatore è fermo, quindi il tratto parte esattamente da lì;
-// - penna abbassata: ogni fotogramma aggiunge un punto al tratto;
-// - penna alzata: il puntatore si muove senza lasciare traccia (per raggiungere il tratto dopo);
-// - penna alzata per `gapMs` dopo l'ultimo tratto: il disegno è finito e si riconosce.
-// In "still", dopo ogni cambio bisogna muoversi prima di poter cambiare ancora: restare fermi a
-// penna alzata per finire non abbassa di nuovo la penna. Se il puntatore esce dall'area la penna si alza.
+// Un puntatore non ha "pulsante": la penna si abbassa in uno di tre modi (penMode):
+// - "wink" e "mouth": un gesto (occhiolino, bocca aperta: gestures.js; main.js chiama togglePen);
+// - "cell": una cella "Penna" accanto al disegno (requestPen). La preparazione parte da quando il
+//   puntatore rientra nell'area di disegno, non da quando si è scelta la cella; se si esce
+//   durante la preparazione si torna ad aspettare il rientro.
+// Abbassare la penna non è istantaneo: c'è una preparazione di `startDelayMs` in cui un puntatore
+// "fantasma" mostra dove partirà il tratto, e ci si può posizionare; la penna scende alla fine,
+// dove si trova il puntatore. Un altro gesto durante la preparazione annulla.
+//
+// Una volta giù, la penna aggiunge un punto al tratto a ogni fotogramma e si alza in tre modi:
+// - stando fermi per `stillMs` (un cerchio si riempie attorno al puntatore): il puntatore non si
+//   muove, quindi non c'è niente da togliere. Prima ci si deve muovere: appena abbassata, restare
+//   fermi non la rialza;
+// - con il gesto: vale subito, ma il gesto muove la testa e quindi il puntatore, perciò si
+//   tolgono dal tratto i punti da quando il gesto è cominciato;
+// - uscendo dall'area (per esempio verso la cella): si tolgono i punti del percorso di uscita,
+//   tornando all'ultima pausa a fine tratto.
+// A penna alzata il puntatore si muove senza lasciare traccia (per raggiungere il tratto dopo);
+// passato `gapMs` dall'ultimo tratto il disegno è finito e si riconosce.
 // Con il mouse (?mouse nell'indirizzo) o il dito: tenere premuto abbassa la penna.
 
 const MIN_POINT_GAP_PX = 2;  // punti più vicini di così non aggiungono nulla
@@ -47,7 +45,7 @@ export class DrawPad {
     this.startDelayMs = 800;
     this.level = null;   // livello del gesto scelto (1 = soglia), per la barra; null = nessun gesto
     this.levelLabel = "";
-    this.penMode = "wink";
+    this.penMode = "wink"; // wink | mouth | cell
     this.palette = PALETTES.dark;
     this.running = false;
     this.pointerPens = false;
@@ -209,10 +207,7 @@ export class DrawPad {
         const last = stroke.at(-1);
         if (!last || Math.hypot(c.x - last[0], c.y - last[1]) >= MIN_POINT_GAP_PX) stroke.push([c.x, c.y, t]);
       }
-      if (!this.pointerPens) {
-        if (this.penMode === "still") this.watchStill(c, t);
-        else if (this.pen) this.watchStill(c, t, true); // gesti e cella: da fermi si alza soltanto
-      }
+      if (!this.pointerPens && this.pen) this.watchStill(c, t);
       if (this.arming) {
         this.progress = (t - this.armedAt) / this.startDelayMs;
         if (this.progress >= 1) {
@@ -227,8 +222,8 @@ export class DrawPad {
     if (!this.pen && !this.arming && this.strokes.length && t - this.penUpAt >= this.gapMs) this.finish();
   }
 
-  // Fermo abbastanza a lungo: la penna cambia stato (liftOnly: si alza soltanto).
-  watchStill(c, t, liftOnly = false) {
+  // Fermo abbastanza a lungo (tenendo conto del tremolio): la penna si alza.
+  watchStill(c, t) {
     if (!this.anchor || Math.hypot(c.x - this.anchor.x, c.y - this.anchor.y) > this.stillPx) {
       this.anchor = { x: c.x, y: c.y };
       this.stillSince = t;
@@ -241,8 +236,7 @@ export class DrawPad {
     if (this.progress >= 1) {
       this.armed = false;
       this.progress = 0;
-      if (this.pen) this.setPen(false, t, Math.max(0, t - this.stillSince - STILL_KEEP_MS));
-      else if (!liftOnly) this.setPen(true, t);
+      this.setPen(false, t, Math.max(0, t - this.stillSince - STILL_KEEP_MS));
     }
   }
 
@@ -349,9 +343,9 @@ export class DrawPad {
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillStyle = this.pen ? p.ink : p.penUp;
-    const GESTURES = { wink: "fai un occhiolino", mouth: "apri la bocca", tilt: "inclina la testa" };
-    const how = this.pointerPens ? "tieni premuto" : this.penMode === "still" ? "fermo un attimo" : this.penMode === "cell" ? "scegli «Penna» e rientra qui" : GESTURES[this.penMode];
-    const up = this.pointerPens ? "rilascia" : this.penMode === "still" ? "fermo un attimo" : this.penMode === "cell" ? "fermo un attimo, o esci dall'area" : `fermo un attimo, o ${GESTURES[this.penMode]} di nuovo`;
+    const GESTURES = { wink: "fai un occhiolino", mouth: "apri la bocca" };
+    const how = this.pointerPens ? "tieni premuto" : this.penMode === "cell" ? "scegli «Penna» e rientra qui" : GESTURES[this.penMode];
+    const up = this.pointerPens ? "rilascia" : this.penMode === "cell" ? "fermo un attimo, o esci dall'area" : `fermo un attimo, o ${GESTURES[this.penMode]} di nuovo`;
     const cancel = this.penMode === "cell" ? "esci dall'area per annullare" : "ripeti il gesto per annullare";
     ctx.fillText(this.waiting ? "✎ penna pronta: torna nell'area di disegno, la preparazione parte quando rientri"
       : this.arming ? `✎ posizionati: la penna sta per scendere (${cancel})`

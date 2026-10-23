@@ -1,4 +1,4 @@
-// Prove della penna (stare fermi alza e abbassa) con un puntatore simulato:
+// Prove della penna (gesto o cella per abbassarla, fermi per alzarla) con un puntatore simulato:
 //   node tools/test-draw-pen.mjs
 // Niente fotocamera né pagina: un finto canvas e un puntatore che si muove a comando.
 import assert from "node:assert/strict";
@@ -16,7 +16,7 @@ const pad = new DrawPad(canvas, { getGaze: () => gaze, isPaused: () => false, on
 pad.rect = canvas.getBoundingClientRect();
 pad.gapMs = 2000;
 pad.stillMs = 700;
-pad.penMode = "still";
+pad.penMode = "wink";
 
 let t = 1000;
 const FRAME = 33;
@@ -37,51 +37,9 @@ function move(x, y, ms) {
   }
 }
 
-// 1) Ferma 0,7 s: la penna si abbassa lì dove il puntatore sta fermo.
-rest(200, 100, 900);
-assert.equal(pad.pen, true, "fermo abbastanza: penna abbassata");
-const start = pad.strokes.at(-1)[0];
-assert.ok(Math.hypot(start[0] - 200, start[1] - 100) < 6, "il tratto parte da dove il puntatore era fermo");
-
-// 2) Appena abbassata, restare fermi non la rialza subito: serve un movimento.
-rest(200, 100, 1500);
-assert.equal(pad.pen, true, "senza muoversi la penna non cambia ancora");
-
-// 3) Movimento (una "L") e poi fermo: la penna si alza; il tratto contiene il movimento.
-move(200, 400, 600);
-move(500, 400, 600);
-assert.equal(pad.pen, true, "durante il movimento la penna resta giù");
-rest(500, 400, 900);
-assert.equal(pad.pen, false, "fermo alla fine del tratto: penna alzata");
-assert.ok(pad.strokes[0].length > 20, "il tratto ha registrato il movimento");
-
-// 4) A penna alzata, restare fermi finisce il disegno e NON riabbassa la penna.
-rest(500, 400, 2600);
-assert.equal(pad.pen, false, "restare fermi a penna alzata non scrive");
-assert.equal(finished.length, 1, "passata la pausa il disegno è consegnato");
-assert.equal(finished[0].length, 1, "un solo tratto");
-
-// 5) Due tratti: si raggiunge l'inizio del secondo con la penna alzata (niente segno nel mezzo).
-move(100, 100, 300); rest(100, 100, 900);   // abbassa
-move(300, 100, 400); rest(300, 100, 900);   // alza
-move(200, 300, 400); rest(200, 300, 900);   // sposta e abbassa
-move(200, 500, 400); rest(200, 500, 900);   // alza
-rest(200, 500, 2600);
-assert.equal(finished.length, 2);
-assert.equal(finished[1].length, 2, "due tratti");
-const bridge = finished[1].some((s) => s.some(([x, y]) => x > 120 && x < 280 && y > 150 && y < 280 && Math.abs(x - 200) > 40));
-assert.ok(!bridge, "il trasferimento tra i due tratti non lascia segno");
-
-// 6) Fuori dall'area la penna si alza.
-rest(200, 100, 900);
-assert.equal(pad.pen, true);
-move(900, 100, 200);
-assert.equal(pad.pen, false, "uscendo dall'area la penna si alza");
-
-// 7) Occhiolino: da fermo la penna non cambia più; togglePen la abbassa e la alza.
-pad.penMode = "wink";
+// 1) Occhiolino: stare fermi non abbassa la penna; togglePen avvia la preparazione e poi la abbassa.
 rest(300, 300, 1500);
-assert.equal(pad.pen, false, "in modalità occhiolino stare fermi non abbassa la penna");
+assert.equal(pad.pen, false, "stare fermi non abbassa la penna");
 pad.startDelayMs = 800;
 const strokesBefore = pad.strokes.length;
 pad.togglePen(t);
@@ -243,6 +201,21 @@ for (const mode of ["wink", "cell"]) {
   const n = lifted.length;
   move(900, 400, 300);
   assert.equal(pad.strokes.at(-1).length, n, `${mode}: a penna alzata spostarsi non disegna`);
+}
+
+// 13) Passata la pausa tra i disegni, il disegno finito viene consegnato.
+rest(900, 400, 2600);
+assert.ok(finished.length > 0, "il disegno viene consegnato a penna alzata");
+
+// 14) La penna non si abbassa da ferma in nessun modo: da fermi con la penna alzata non succede niente.
+for (const mode of ["wink", "mouth", "cell"]) {
+  pad.penMode = mode;
+  pad.strokes = [];
+  pad.pen = false;
+  pad.arming = false;
+  pad.waiting = false;
+  rest(300, 300, 2000);
+  assert.equal(pad.pen, false, `${mode}: stare fermi a penna alzata non scrive`);
 }
 
 console.log("ok");

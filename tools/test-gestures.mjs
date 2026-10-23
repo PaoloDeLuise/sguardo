@@ -1,27 +1,28 @@
-// Prove dei gesti della penna (occhiolino, bocca aperta, inclinazione) con fotogrammi simulati:
+// Prove dei gesti della penna (occhiolino, bocca aperta) con fotogrammi simulati:
 //   node tools/test-gestures.mjs
-// Controlla soglie, isteresi, tempo di tenuta, scatto una sola volta, sensibilità e posizione
-// "dritta" della testa. Non dice nulla sui valori reali di una faccia: per quelli c'è la barra di
-// livello nell'area di disegno, con cui tarare la sensibilità sul proprio dispositivo.
+// Controlla soglie, isteresi, tempo di tenuta, scatto una sola volta, sensibilità e fotogrammi
+// minimi. Non dice nulla sui valori reali di una faccia: per quelli c'è la barra di livello
+// nell'area di disegno, con cui tarare la sensibilità sul proprio dispositivo.
 import assert from "node:assert/strict";
 import { GESTURE_MODES, GestureDetector } from "../js/gestures.js";
 
 const FRAME = 33;
 
-// Fotogrammi con i valori dati per `ms` millisecondi; restituisce quante volte il gesto è scattato.
-function run(det, values, ms, start = 0) {
+// Fotogrammi con i valori dati per `ms` millisecondi (a `frame` ms uno dall'altro); restituisce
+// quante volte il gesto è scattato.
+function run(det, values, ms, frame = FRAME) {
   let fired = 0;
-  const t0 = det.clock ?? start;
+  const t0 = det.clock ?? 0;
   let t = t0;
-  for (; t < t0 + ms; t += FRAME) {
-    if (det.update({ face: true, t, eyes: [0, 0], jaw: 0, roll: 0, ...values })) fired++;
+  for (; t < t0 + ms; t += frame) {
+    if (det.update({ face: true, t, eyes: [0, 0], jaw: 0, ...values })) fired++;
   }
   det.clock = t;
   return fired;
 }
 const make = (mode, sensitivity = 1) => Object.assign(new GestureDetector(), { mode, sensitivity });
 
-assert.deepEqual(GESTURE_MODES, ["wink", "mouth", "tilt"]);
+assert.deepEqual(GESTURE_MODES, ["wink", "mouth"]);
 
 // Bocca aperta: sotto soglia niente, sopra scatta una sola volta dopo il tempo di tenuta.
 let d = make("mouth");
@@ -57,52 +58,43 @@ assert.equal(run(d, { eyes: [0.9, 0.5] }, 600), 0, "se anche l'altro è chiuso a
 d = make("wink");
 assert.equal(run(d, { eyes: [0.9, 0.1] }, 80), 0, "un guizzo di pochi fotogrammi non conta");
 
-// Inclinazione: dritta, inclina sopra soglia (da una parte o dall'altra), poi torna.
-d = make("tilt");
-assert.equal(run(d, { roll: 5 }, 1000), 0, "piccola inclinazione: niente");
-assert.equal(run(d, { roll: 25 }, 1000), 1, "inclinata a destra: scatta");
-run(d, { roll: 3 }, 800);
-assert.equal(run(d, { roll: -22 }, 1000), 1, "inclinata a sinistra: scatta");
+// Telefono, pochi fotogrammi al secondo: a 8 fps un solo fotogramma sopra soglia dura più di
+// 150 ms ma non basta (rumore); due o tre fotogrammi di fila scattano.
+d = make("wink");
+assert.equal(run(d, { eyes: [0.9, 0.1] }, 125, 125), 0, "un fotogramma isolato a 8 fps non scatta");
+run(d, {}, 400, 125);
+assert.equal(run(d, { eyes: [0.9, 0.1] }, 600, 125), 1, "cinque fotogrammi di fila scattano");
+d = make("wink");
+let flicker = 0;
+for (let i = 0; i < 12; i++) flicker += run(d, i % 2 ? {} : { eyes: [0.9, 0.1] }, 125, 125); // sì-no-sì-no
+assert.equal(flicker, 0, "un segnale che salta non scatta");
 
-// La posizione "dritta" non è lo zero: chi tiene la testa già un po' inclinata non scatta di continuo,
-// e segue lentamente (un cambio di postura non resta un gesto per sempre).
-d = make("tilt");
-assert.equal(run(d, { roll: 12 }, 500), 0, "parte già inclinato di 12°: quella è la sua posizione dritta");
-assert.equal(run(d, { roll: 12 }, 5000), 0);
-assert.equal(run(d, { roll: 12 + 25 }, 1000), 1, "ma 25° oltre la sua posizione scatta");
-// Rotazione che attraversa ±180° (matrice con asse invertito): lo scarto si calcola correttamente.
-d = make("tilt");
-run(d, { roll: 178 }, 500);
-assert.equal(run(d, { roll: -157 }, 1000), 1, "da 178° a -157° sono 25° di inclinazione, non 335°");
-
-// Un'inclinazione lenta trascina il puntatore per mezzo secondo prima di superare la soglia:
-// i punti vanno tolti da quando il gesto è cominciato, non solo dagli ultimi istanti.
-d = make("tilt");
-run(d, { roll: 0 }, 500);
+// Un gesto lento trascina il puntatore prima di superare la soglia: i punti vanno tolti da quando
+// il gesto è cominciato, non solo dagli ultimi istanti (apertura lenta della bocca).
+d = make("mouth");
+run(d, { jaw: 0 }, 500);
 let firedAt = null, startedAt = null;
-for (let t = d.clock, end = t + 2500; t < end; t += FRAME) {
-  const roll = Math.min(25, ((t - d.clock) / 1000) * 30); // 30° al secondo
-  if (startedAt === null && roll >= 8) startedAt = t; // 8° = poco oltre metà della soglia
-  if (d.update({ face: true, t, eyes: [0, 0], jaw: 0, roll }) && firedAt === null) firedAt = t;
+const base = d.clock;
+for (let t = base; t < base + 3000; t += FRAME) {
+  const jaw = Math.min(0.5, ((t - base) / 1000) * 0.4); // 0,4 al secondo
+  if (startedAt === null && jaw >= 0.2) startedAt = t; // poco oltre metà della soglia
+  if (d.update({ face: true, t, eyes: [0, 0], jaw }) && firedAt === null) firedAt = t;
 }
-assert.ok(firedAt !== null, "l'inclinazione lenta scatta");
+assert.ok(firedAt !== null, "l'apertura lenta scatta");
 const back = d.backMsAt(firedAt);
-assert.ok(back > make("tilt").backMs, "si taglia più indietro del minimo");
+assert.ok(back > make("mouth").backMs, "si taglia più indietro del minimo");
 assert.ok(back >= firedAt - startedAt, "fino a quando il gesto è cominciato");
 assert.ok(back <= 800, "ma mai oltre il limite");
 // Un gesto rapido taglia il minimo.
 d = make("mouth");
 run(d, { jaw: 0 }, 300);
 let quick = null;
-for (let t = d.clock, end = t + 600; t < end; t += FRAME) if (d.update({ face: true, t, eyes: [0, 0], jaw: 0.6, roll: 0 })) quick = t;
+for (let t = d.clock, end = t + 600; t < end; t += FRAME) if (d.update({ face: true, t, eyes: [0, 0], jaw: 0.6 })) quick = t;
 assert.ok(d.backMsAt(quick) < 450, "gesto rapido: poco da tagliare");
 
 // Senza volto nessun gesto, e il livello è zero.
 d = make("mouth");
 assert.equal(d.update({ face: false, t: 0 }), false);
 assert.equal(d.level, 0);
-
-// Gli ultimi punti del tratto, disturbati dal gesto, si tolgono: backMs copre tenuta + un margine.
-assert.ok(make("wink").backMs > 150 && make("mouth").backMs > 200 && make("tilt").backMs > 250);
 
 console.log("ok");

@@ -26,9 +26,9 @@ const RECAL_MIN_INTERVAL_MS = 60_000; // non riproporre la ricalibrazione troppo
 const SNOOZE_MS = 180_000;            // dopo "Non ora"
 const PROMPT_SECONDS = 5;             // conto alla rovescia prima della ricalibrazione rapida
 const RESULT_AUTO_SECONDS = 10;       // dopo la calibrazione si prosegue da soli
-// Come si abbassa e si alza la penna della scrittura a mano: tre gesti (gestures.js), una cella
-// accanto al disegno, oppure stando fermi. Ordine del menu.
-const PEN_MODES = { wink: "occhiolino", mouth: "bocca aperta", tilt: "inclinare la testa", cell: "cella accanto", still: "da fermo" };
+// Come si abbassa la penna della scrittura a mano: un gesto (gestures.js) o una cella accanto al
+// disegno. Ordine del menu.
+const PEN_MODES = { wink: "occhiolino", mouth: "bocca aperta", cell: "cella accanto" };
 const RESULT_GRACE_MS = 3000;         // all'apertura del risultato le celle non scelgono: lo sguardo è ancora dov'era
 
 // ?mouse nell'indirizzo: il mouse fa le veci dello sguardo (per provare la tastiera senza calibrare).
@@ -536,7 +536,6 @@ function showDasherMenu() {
 // Scrittura a mano: impostazioni e avvio.
 function showDrawMenu() {
   const gap = (settings.drawGapMs / 1000).toFixed(1);
-  const still = settings.penMode === "still";
   const gesture = GESTURE_MODES.includes(settings.penMode);
   const taught = Object.values(drawPersonal).reduce((n, list) => n + list.length, 0);
   const next = () => {
@@ -557,10 +556,10 @@ function showDrawMenu() {
     { label: `Penna:\n${PEN_MODES[settings.penMode]}`, hint: "tocca per cambiare", kind: "cmd", action: next },
     step("Pausa tra i disegni\npiù breve", "drawGapMs", -500, 1000, 5000, `${gap} s`),
     step("Pausa tra i disegni\npiù lunga", "drawGapMs", 500, 1000, 5000, `${gap} s`),
-    step(`Fermo per ${still ? "cambiare" : "alzare"} la penna:\nattesa più breve`, "penStillMs", -100, 400, 1500, stillTime),
-    step(`Fermo per ${still ? "cambiare" : "alzare"} la penna:\nattesa più lunga`, "penStillMs", 100, 400, 1500, stillTime),
-    still ? null : step("Preparazione penna\npiù breve", "penDelayMs", -100, 200, 2000, delay),
-    still ? null : step("Preparazione penna\npiù lunga", "penDelayMs", 100, 200, 2000, delay),
+    step("Fermo per alzare la penna:\nattesa più breve", "penStillMs", -100, 400, 1500, stillTime),
+    step("Fermo per alzare la penna:\nattesa più lunga", "penStillMs", 100, 400, 1500, stillTime),
+    step("Preparazione penna\npiù breve", "penDelayMs", -100, 200, 2000, delay),
+    step("Preparazione penna\npiù lunga", "penDelayMs", 100, 200, 2000, delay),
     gesture ? step("Gesto più facile\n(soglia più bassa)", "penSens", 0.1, 0.5, 2, settings.penSens.toFixed(1)) : null,
     gesture ? step("Gesto più difficile\n(soglia più alta)", "penSens", -0.1, 0.5, 2, settings.penSens.toFixed(1)) : null,
     taught ? { label: `Dimentica le lettere\nimparate (${taught})`, kind: "cmd remove", action: () => { for (const k of Object.keys(drawPersonal)) delete drawPersonal[k]; save(DRAW_KEY, drawPersonal); showDrawMenu(); } } : null,

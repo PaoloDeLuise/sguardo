@@ -1,24 +1,24 @@
-// Gesti che abbassano e alzano la penna della scrittura a mano: occhiolino, bocca aperta,
-// inclinazione della testa. Un puntatore non ha pulsante e questi gesti non muovono il puntatore
-// (con la testa che guida, la mandibola e l'inclinazione laterale sono assi indipendenti).
+// Gesti che abbassano la penna della scrittura a mano (e la alzano, volendo): occhiolino e bocca
+// aperta. Un puntatore non ha pulsante e questi gesti non muovono il puntatore (con la testa che
+// guida, gli occhi e la mandibola sono indipendenti).
 //
 // Per ogni gesto c'è un livello: 1 = soglia. Il gesto è "attivo" sopra la soglia e si disattiva
 // scendendo sotto il 60% della soglia (isteresi, per non tremare attorno al limite). Se resta attivo
-// per `hold` millisecondi scatta, una sola volta: per scattare ancora bisogna rilasciarlo.
+// per `hold` millisecondi e per almeno MIN_FRAMES fotogrammi scatta, una sola volta: per scattare
+// ancora bisogna rilasciarlo. I fotogrammi contano perché sul telefono ce ne sono pochi al secondo
+// e il segnale è rumoroso: a 10 fps 150 ms sono un fotogramma solo, e uno scatto isolato non basta.
 // Il livello si mostra a schermo (barra nell'area di disegno) per tarare la sensibilità sul proprio
-// dispositivo: sul telefono i segnali sono più rumorosi che sul portatile.
+// dispositivo.
 
-export const GESTURE_MODES = ["wink", "mouth", "tilt"];
+export const GESTURE_MODES = ["wink", "mouth"];
 
 // Soglie con sensibilità 1. wink: un occhio chiuso oltre `on` e l'altro sotto `other`.
-const THRESHOLDS = { wink: { on: 0.6, other: 0.35 }, mouth: { on: 0.35 }, tilt: { on: 15 } }; // tilt in gradi
-const HOLD_MS = { wink: 150, mouth: 200, tilt: 250 };
+const THRESHOLDS = { wink: { on: 0.6, other: 0.35 }, mouth: { on: 0.35 } };
+const HOLD_MS = { wink: 150, mouth: 200 };
+const MIN_FRAMES = 3;
 const RELEASE = 0.6;        // si disattiva sotto questa parte della soglia
 const ONSET = 0.5;          // il gesto "comincia" quando il livello supera questa parte della soglia
 const MAX_BACK_MS = 800;    // quanto indietro al massimo si tolgono i punti disegnati durante il gesto
-const BASELINE_RATE = 0.02; // quanto in fretta la posizione "dritta" segue la testa (per fotogramma)
-
-const wrap = (deg) => ((((deg + 180) % 360) + 360) % 360) - 180;
 
 export class GestureDetector {
   constructor() {
@@ -31,12 +31,12 @@ export class GestureDetector {
     this.level = 0;
     this.active = false;
     this.since = null;
+    this.frames = 0;      // fotogrammi consecutivi con il gesto attivo
     this.onsetAt = null;  // da quando il livello è continuamente sopra ONSET
     this.handled = false;
-    this.baseline = null; // inclinazione "dritta" della testa
   }
 
-  // f: fotogramma del tracker { face, eyes: [sinistro, destro], jaw, roll (gradi) }.
+  // f: fotogramma del tracker { face, eyes: [sinistro, destro], jaw }.
   measure(f) {
     if (!f.face) return 0;
     const k = this.sensitivity;
@@ -48,15 +48,6 @@ export class GestureDetector {
       return small < other ? big / (on / k) : 0;
     }
     if (this.mode === "mouth") return (f.jaw ?? 0) / (THRESHOLDS.mouth.on / k);
-    if (this.mode === "tilt") {
-      if (f.roll == null) return 0;
-      this.baseline ??= f.roll;
-      const delta = Math.abs(wrap(f.roll - this.baseline));
-      const on = THRESHOLDS.tilt.on / k;
-      // La posizione dritta segue lentamente la testa, ma non mentre è inclinata.
-      if (delta < on * RELEASE) this.baseline += wrap(f.roll - this.baseline) * BASELINE_RATE;
-      return delta / on;
-    }
     return 0;
   }
 
@@ -68,12 +59,14 @@ export class GestureDetector {
     if (!this.active && this.level >= 1) {
       this.active = true;
       this.since = f.t;
+      this.frames = 0;
     } else if (this.active && this.level < RELEASE) {
       this.active = false;
       this.since = null;
       this.handled = false;
     }
-    if (this.active && !this.handled && f.t - this.since >= HOLD_MS[this.mode]) {
+    if (this.active) this.frames++;
+    if (this.active && !this.handled && f.t - this.since >= HOLD_MS[this.mode] && this.frames >= MIN_FRAMES) {
       this.handled = true;
       return true;
     }
@@ -81,8 +74,7 @@ export class GestureDetector {
   }
 
   // Quanto indietro, da t, tagliare il tratto: i punti disegnati da quando il gesto è cominciato
-  // (non solo da quando è scattato) sono già mossi dal gesto. Un'inclinazione lenta, per esempio,
-  // trascina il puntatore per mezzo secondo prima di superare la soglia.
+  // (non solo da quando è scattato) sono già mossi dal gesto: aprendo la bocca la testa si sposta.
   backMsAt(t) {
     const since = this.onsetAt == null ? 0 : t - this.onsetAt;
     return Math.min(MAX_BACK_MS, Math.max(this.backMs, since + 100));

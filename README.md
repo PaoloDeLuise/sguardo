@@ -139,46 +139,39 @@ con gli occhi.
 5. **Scrittura a mano** (menu → *Scrittura a mano*, o **Scrivi a mano** nella barra, o il tasto `H`):
    il puntatore disegna una lettera o una parola intera. Pensata per la modalità con la testa, ma
    vale per tutte. Si attiva solo quando la si sceglie: non cambia nulla per chi usa la tastiera.
-   - **Penna:** un puntatore non ha pulsante, quindi la penna si abbassa e si alza in uno di cinque
-     modi, a scelta nel menu (*Scrittura a mano* → *Penna*; il livello di ogni gesto si vede in
-     una barra in fondo al disegno, oltre il segno scatta):
-     - **occhiolino** (predefinito): un occhio chiuso per un istante (0,15 s); un battito con tutti
-       e due gli occhi non conta;
+   - **Penna:** un puntatore non ha pulsante. Si **abbassa** in uno di tre modi, a scelta nel menu
+     (*Scrittura a mano* → *Penna*; il livello del gesto si vede in una barra in fondo al
+     disegno, oltre il segno scatta):
+     - **occhiolino** (predefinito): un occhio chiuso per un istante (0,15 s e almeno tre
+       fotogrammi: sul telefono, con pochi fotogrammi al secondo, un guizzo isolato non basta). Un
+       battito con tutti e due gli occhi non conta;
      - **bocca aperta**: la mandibola è indipendente dal puntatore e il segnale è forte anche con
        la fotocamera del telefono;
-     - **inclinare la testa** di lato (circa 15°) e tornare dritti, da una parte o dall'altra; la
-       posizione "dritta" segue lentamente la testa, quindi non serve tenerla perfettamente ferma;
      - **cella accanto**: si fissa la cella **Penna** e la preparazione parte da quando il
-       puntatore **rientra** nell'area di disegno. A penna giù, uscire dall'area la alza (e di
-       nuovo la cella per il tratto dopo): è il modo più lento, ma non chiede nessun gesto;
-     - **da fermo**: si sta fermi per circa 0,7 secondi (un cerchio si riempie attorno al
-       puntatore). Dopo ogni cambio bisogna muoversi prima di poter cambiare ancora, quindi
-       restare fermi a penna alzata per finire non scrive niente.
+       puntatore **rientra** nell'area di disegno. Non chiede nessun gesto.
 
-     **Preparazione:** con i tre gesti e con la cella la penna non scende all'istante: per 0,8
-     secondi (regolabile nel menu) compare un puntatore fantasma con un cerchio che si riempie, ci
-     si posiziona con calma e la penna scende alla fine, dove si trova il puntatore. Ripetere il
-     gesto durante la preparazione la annulla. Alzare la penna col gesto vale subito, e gli
-     ultimi istanti del tratto, mossi dal gesto, si tolgono. Mentre si fa il gesto il puntatore
-     resta fermo. La **soglia** dei gesti si regola nel menu (*Gesto più facile / più difficile*):
-     sul telefono i segnali sono più rumorosi che sul portatile.
+     **Preparazione:** la penna non scende all'istante. Per 0,8 secondi (regolabile nel menu)
+     compare un puntatore fantasma con un cerchio che si riempie, ci si posiziona con calma e la
+     penna scende alla fine, dove si trova il puntatore. Ripetere il gesto durante la preparazione
+     la annulla (con la cella, uscire dall'area).
 
-     **Alzare la penna:** con i gesti e con la cella, la penna si alza anche **stando fermi** (circa
-     0,7 s, regolabile nel menu), con lo stesso cerchio che si riempie attorno al puntatore. È il
-     modo più semplice: niente gesto, il puntatore non si muove, e il tremolio del riposo non
-     entra nel tratto (si tiene solo l'inizio della pausa). Serve prima muoversi: appena abbassata
-     la penna, restare fermi non la rialza. Una pausa breve a metà tratto non basta: se la penna
-     si alza troppo spesso, allunga l'attesa; se è lenta, accorciala.
+     **Alzare la penna** si può in tre modi:
+     - **da fermi** (circa 0,7 s, regolabile nel menu), con lo stesso cerchio che si riempie
+       attorno al puntatore, tenendo conto del tremolio: è il più semplice, il puntatore non si
+       muove e del riposo finale si tiene solo l'inizio. Serve prima muoversi: appena abbassata la
+       penna, restare fermi non la rialza. Se la penna si alza troppo spesso mentre pensi, allunga
+       l'attesa;
+     - **col gesto**: vale subito. Il gesto sposta la testa, e quindi il puntatore, perciò si
+       tolgono dal tratto i punti disegnati *da quando il gesto è cominciato* (non solo da quando
+       è scattato: aprire la bocca lentamente trascina il puntatore per mezzo secondo);
+     - **uscendo dall'area** (per esempio verso la cella): si tolgono i punti del percorso di
+       uscita e il tratto torna all'ultima **pausa** a fine tratto. Per questo, prima di andare
+       alla cella, fermati un attimo dove il tratto finisce; senza pausa si tolgono solo gli
+       ultimi istanti.
 
-     In alternativa si alza con il gesto, o uscendo dall'area (cella). In quei casi il puntatore
-     continua a seguire la testa e disegnerebbe ciò che non si vuole, quindi si tolgono dal tratto
-     i punti disegnati *da quando il gesto è cominciato* (non solo da quando è scattato: un'inclinazione
-     lenta trascina il puntatore per mezzo secondo) e, uscendo, il percorso di uscita: il tratto
-     torna all'ultima pausa a fine tratto. Per questo, prima di andare alla cella, fermati un
-     attimo dove il tratto finisce; senza pausa si tolgono solo gli ultimi istanti.
-
-     A penna alzata il puntatore si muove senza lasciare segno; uscendo dall'area di disegno la
-     penna si alza da sola.
+     La **soglia** dei gesti si regola nel menu (*Gesto più facile / più difficile*): sul
+     telefono i segnali sono più rumorosi che sul portatile. A penna alzata il puntatore si
+     muove senza lasciare segno.
    - **Lettera o parola:** si scrivono **lettere staccate in fila da sinistra a destra**. Le lettere
      si separano da sole dalla posizione (la barra della E o il puntino della I restano con la
      loro lettera), in qualunque ordine di tratti. Una lettera sola si aggiunge alla parola in
@@ -305,8 +298,8 @@ node tools/test-modes.mjs        # modalità occhi / testa / occhi + testa, con 
 node tools/evaluate.mjs --modes  # le tre modalità sulle stesse registrazioni
 node tools/test-recognizer.mjs   # lettere disegnate, disegni sintetici (--tune per i pesi; lento)
 node tools/test-words.mjs        # parole disegnate: separazione delle lettere e scelta nel dizionario
-node tools/test-draw-pen.mjs     # penna: da fermo, preparazione, cella accanto, taglio di fine tratto (puntatore simulato)
-node tools/test-gestures.mjs     # gesti della penna (occhiolino, bocca, inclinazione) con fotogrammi simulati
+node tools/test-draw-pen.mjs     # penna: preparazione, cella accanto, alzata da fermi, taglio dei punti (puntatore simulato)
+node tools/test-gestures.mjs     # gesti della penna (occhiolino, bocca aperta) con fotogrammi simulati
 node tools/simulate-dasher.mjs   # scrittura continua con uno sguardo simulato (errore ~100 px)
 node tools/simulate-dwell.mjs    # selezione delle celle con uno sguardo simulato, PC e telefono
 ```
@@ -331,7 +324,7 @@ registrazioni, non su una sola: tra una sessione e l'altra cambiano postura e lu
 | `js/predictor.js` | Suggerimento parole: frequenze italiane + parole usate dalla persona |
 | `js/dasher.js` | Scrittura continua |
 | `js/draw.js` | Scrittura a mano: area di disegno, penna (si alza e si abbassa stando fermi), fine disegno |
-| `js/gestures.js` | Gesti che muovono la penna: occhiolino, bocca aperta, inclinazione, con livello e soglia |
+| `js/gestures.js` | Gesti che abbassano la penna: occhiolino e bocca aperta, con livello e soglia |
 | `js/recognizer.js` | Lettere disegnate ($P), separazione in lettere, parole dal dizionario, lettere imparate |
 | `js/voice.js` | Voce clonata nella pagina (richieste a `serve.py`, memoria delle frasi) |
 | `serve.py` | Server locale: file, voce, registrazioni; `--https` per il telefono |
