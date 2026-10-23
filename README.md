@@ -155,19 +155,22 @@ con gli occhi.
      penna scende alla fine, dove si trova il puntatore. Ripetere il gesto durante la preparazione
      la annulla (con la cella, uscire dall'area).
 
-     **Alzare la penna** si può in tre modi:
-     - **da fermi** (circa 0,7 s, regolabile nel menu), con lo stesso cerchio che si riempie
-       attorno al puntatore, tenendo conto del tremolio: è il più semplice, il puntatore non si
-       muove e del riposo finale si tiene solo l'inizio. Serve prima muoversi: appena abbassata la
-       penna, restare fermi non la rialza. Se la penna si alza troppo spesso mentre pensi, allunga
-       l'attesa;
-     - **col gesto**: vale subito. Il gesto sposta la testa, e quindi il puntatore, perciò si
-       tolgono dal tratto i punti disegnati *da quando il gesto è cominciato* (non solo da quando
-       è scattato: aprire la bocca lentamente trascina il puntatore per mezzo secondo);
-     - **uscendo dall'area** (per esempio verso la cella): si tolgono i punti del percorso di
-       uscita e il tratto torna all'ultima **pausa** a fine tratto. Per questo, prima di andare
-       alla cella, fermati un attimo dove il tratto finisce; senza pausa si tolgono solo gli
-       ultimi istanti.
+     **Alzare la penna** dipende dal modo:
+     - **occhiolino**: solo con l'occhiolino di nuovo (o uscendo dall'area). Stare fermi non alza
+       niente e uscire dall'area non taglia il tratto;
+     - **bocca aperta**: solo riaprendo la bocca (o uscendo dall'area, senza tagliare niente).
+       Aprire la bocca sposta la testa, e quindi il puntatore, perciò si tolgono dal tratto i
+       punti disegnati *da quando il gesto è cominciato* (non solo da quando è scattato: aprirla
+       lentamente trascina il puntatore per mezzo secondo);
+     - **cella**: da fermi (circa 0,7 s, con un cerchio che si riempie attorno al puntatore e
+       tenendo conto del tremolio), oppure **uscendo dall'area** verso la cella. In quel caso si tolgono i
+       punti del percorso di uscita e il tratto torna all'ultima **pausa** a fine tratto: prima di
+       andare alla cella fermati un attimo dove il tratto finisce (senza pausa si tolgono solo gli
+       ultimi istanti). Il taglio dell'uscita c'è solo in questo modo.
+
+     Con la cella, da fermi la penna si alza solo se prima ci si è mossi: appena abbassata, restare
+     fermi non la rialza. Se si alza troppo spesso mentre pensi, allunga l'attesa nel menu. Con i
+     gesti non c'è nessuna alzata da fermi.
 
      La **soglia** dei gesti si regola nel menu (*Gesto più facile / più difficile*): sul
      telefono i segnali sono più rumorosi che sul portatile. A penna alzata il puntatore si

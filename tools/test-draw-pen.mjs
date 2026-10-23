@@ -174,7 +174,7 @@ assert.ok(cut.at(-1)[0] < 790, "gli ultimi istanti prima dell'uscita sono tolti"
 assert.ok(cut.length > 10, "il resto del tratto resta");
 
 // 12) Con i gesti e con la cella la penna si alza anche stando fermi (senza gesto): niente drift.
-for (const mode of ["wink", "cell"]) {
+for (const mode of ["cell"]) {
   pad.penMode = mode;
   pad.strokes = [];
   pad.pen = false;
@@ -201,6 +201,45 @@ for (const mode of ["wink", "cell"]) {
   const n = lifted.length;
   move(900, 400, 300);
   assert.equal(pad.strokes.at(-1).length, n, `${mode}: a penna alzata spostarsi non disegna`);
+}
+
+// 12b) Con i gesti (occhiolino, bocca aperta) la penna si alza SOLO col gesto: da fermi non si alza mai.
+for (const mode of ["wink", "mouth"]) {
+  pad.penMode = mode;
+  pad.strokes = [];
+  pad.pen = false;
+  pad.arming = false;
+  move(100, 200, 100);
+  pad.togglePen(t);
+  rest(120, 200, 900);
+  assert.equal(pad.pen, true, `${mode}: penna giù`);
+  move(120, 400, 400);
+  move(400, 400, 400);
+  rest(400, 400, 5000); // fermi per molto più dell'attesa da fermo
+  assert.equal(pad.pen, true, `${mode}: da fermi la penna resta giù`);
+  assert.ok(pad.strokes.at(-1).length > 40, `${mode}: e il tratto continua a registrare`);
+  pad.togglePen(t, 0);
+  assert.equal(pad.pen, false, `${mode}: col gesto di nuovo si alza`);
+}
+
+// 12c) Uscendo dall'area con l'occhiolino (o la bocca) la penna si alza ma il tratto NON viene tagliato:
+// il taglio dell'uscita c'è solo con la cella.
+for (const mode of ["wink", "mouth"]) {
+  pad.penMode = mode;
+  pad.strokes = [];
+  pad.pen = false;
+  pad.arming = false;
+  move(100, 200, 100);
+  pad.togglePen(t);
+  rest(120, 200, 900);
+  assert.equal(pad.pen, true, `${mode}: penna giù`);
+  move(120, 400, 500);
+  move(400, 400, 500);
+  rest(400, 400, 400); // c'è una pausa: con la cella il tratto tornerebbe qui
+  move(780, 400, 250);
+  move(900, 400, 80); // esce
+  assert.equal(pad.pen, false, `${mode}: uscendo la penna si alza`);
+  assert.ok(pad.strokes.at(-1).at(-1)[0] > 700, `${mode}: il tratto resta com'è, senza taglio dell'uscita`);
 }
 
 // 13) Passata la pausa tra i disegni, il disegno finito viene consegnato.

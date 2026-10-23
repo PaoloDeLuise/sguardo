@@ -556,8 +556,9 @@ function showDrawMenu() {
     { label: `Penna:\n${PEN_MODES[settings.penMode]}`, hint: "tocca per cambiare", kind: "cmd", action: next },
     step("Pausa tra i disegni\npiù breve", "drawGapMs", -500, 1000, 5000, `${gap} s`),
     step("Pausa tra i disegni\npiù lunga", "drawGapMs", 500, 1000, 5000, `${gap} s`),
-    step("Fermo per alzare la penna:\nattesa più breve", "penStillMs", -100, 400, 1500, stillTime),
-    step("Fermo per alzare la penna:\nattesa più lunga", "penStillMs", 100, 400, 1500, stillTime),
+    // Con i gesti la penna si alza solo col gesto: l'attesa da fermo c'è solo con la cella.
+    settings.penMode === "cell" ? step("Fermo per alzare la penna:\nattesa più breve", "penStillMs", -100, 400, 1500, stillTime) : null,
+    settings.penMode === "cell" ? step("Fermo per alzare la penna:\nattesa più lunga", "penStillMs", 100, 400, 1500, stillTime) : null,
     step("Preparazione penna\npiù breve", "penDelayMs", -100, 200, 2000, delay),
     step("Preparazione penna\npiù lunga", "penDelayMs", 100, 200, 2000, delay),
     gesture ? step("Gesto più facile\n(soglia più bassa)", "penSens", 0.1, 0.5, 2, settings.penSens.toFixed(1)) : null,

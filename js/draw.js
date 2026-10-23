@@ -9,16 +9,17 @@
 // "fantasma" mostra dove partirà il tratto, e ci si può posizionare; la penna scende alla fine,
 // dove si trova il puntatore. Un altro gesto durante la preparazione annulla.
 //
-// Una volta giù, la penna aggiunge un punto al tratto a ogni fotogramma e si alza in tre modi:
-// - stando fermi per `stillMs` (un cerchio si riempie attorno al puntatore): il puntatore non si
-//   muove, quindi non c'è niente da togliere. Prima ci si deve muovere: appena abbassata, restare
-//   fermi non la rialza;
-// - con il gesto: vale subito, ma il gesto muove la testa e quindi il puntatore, perciò si
-//   tolgono dal tratto i punti da quando il gesto è cominciato;
-// - uscendo dall'area (per esempio verso la cella): si tolgono i punti del percorso di uscita,
-//   tornando all'ultima pausa a fine tratto.
-// A penna alzata il puntatore si muove senza lasciare traccia (per raggiungere il tratto dopo);
-// passato `gapMs` dall'ultimo tratto il disegno è finito e si riconosce.
+// Una volta giù, la penna aggiunge un punto al tratto a ogni fotogramma e si alza così:
+// - occhiolino: solo con l'occhiolino di nuovo (e uscendo dall'area, senza tagliare niente);
+// - bocca aperta: solo riaprendo la bocca (e uscendo dall'area, senza tagliare niente). Aprire la
+//   bocca muove la testa e quindi il puntatore, perciò si tolgono dal tratto i punti da quando il
+//   gesto è cominciato;
+// - cella: stando fermi per `stillMs` (un cerchio si riempie attorno al puntatore, tenendo conto
+//   del tremolio), oppure uscendo dall'area verso la cella: si tolgono i punti del percorso di
+//   uscita, tornando all'ultima pausa a fine tratto.
+// Da fermi (solo con la cella) la penna si alza solo se prima ci si è mossi: appena abbassata,
+// restare fermi non la rialza. A penna alzata il puntatore si muove senza lasciare traccia (per raggiungere il tratto
+// dopo); passato `gapMs` dall'ultimo tratto il disegno è finito e si riconosce.
 // Con il mouse (?mouse nell'indirizzo) o il dito: tenere premuto abbassa la penna.
 
 const MIN_POINT_GAP_PX = 2;  // punti più vicini di così non aggiungono nulla
@@ -182,7 +183,8 @@ export class DrawPad {
     const r = this.rect;
     const inside = g && g.x >= r.left && g.x <= r.right && g.y >= r.top && g.y <= r.bottom;
     this.cursor = inside ? { x: g.x - r.left, y: g.y - r.top } : null;
-    if (!inside && this.pen) this.setPen(false, t, 0, true);
+    // Uscendo dall'area la penna si alza; solo con la cella il percorso di uscita si toglie dal tratto.
+    if (!inside && this.pen) this.setPen(false, t, 0, this.penMode === "cell");
     if (!inside && this.arming) {
       this.arming = false;
       this.penUpAt = t;
@@ -207,7 +209,8 @@ export class DrawPad {
         const last = stroke.at(-1);
         if (!last || Math.hypot(c.x - last[0], c.y - last[1]) >= MIN_POINT_GAP_PX) stroke.push([c.x, c.y, t]);
       }
-      if (!this.pointerPens && this.pen) this.watchStill(c, t);
+      // Con i gesti la penna si alza solo col gesto: l'alzata da fermi c'è solo con la cella.
+      if (!this.pointerPens && this.pen && this.penMode === "cell") this.watchStill(c, t);
       if (this.arming) {
         this.progress = (t - this.armedAt) / this.startDelayMs;
         if (this.progress >= 1) {
@@ -345,7 +348,8 @@ export class DrawPad {
     ctx.fillStyle = this.pen ? p.ink : p.penUp;
     const GESTURES = { wink: "fai un occhiolino", mouth: "apri la bocca" };
     const how = this.pointerPens ? "tieni premuto" : this.penMode === "cell" ? "scegli «Penna» e rientra qui" : GESTURES[this.penMode];
-    const up = this.pointerPens ? "rilascia" : this.penMode === "cell" ? "fermo un attimo, o esci dall'area" : `fermo un attimo, o ${GESTURES[this.penMode]} di nuovo`;
+    const up = this.pointerPens ? "rilascia" : this.penMode === "cell" ? "fermo un attimo, o esci dall'area"
+      : `${GESTURES[this.penMode]} di nuovo`;
     const cancel = this.penMode === "cell" ? "esci dall'area per annullare" : "ripeti il gesto per annullare";
     ctx.fillText(this.waiting ? "✎ penna pronta: torna nell'area di disegno, la preparazione parte quando rientri"
       : this.arming ? `✎ posizionati: la penna sta per scendere (${cancel})`
