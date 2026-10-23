@@ -126,4 +126,58 @@ assert.deepEqual(eyeState({ eyeBlinkLeft: 0.8, eyeBlinkRight: 0.9 }), { wink: fa
 assert.deepEqual(eyeState({ eyeBlinkLeft: 0.2, eyeBlinkRight: 0.1 }), { wink: false, blink: false });
 assert.deepEqual(eyeState({ eyeBlinkLeft: 0.5, eyeBlinkRight: 0.5 }), { wink: false, blink: false }, "a metà non è niente");
 
+// 9) Cella "Penna": la preparazione parte da quando il puntatore rientra nell'area, non dalla scelta.
+pad.penMode = "cell";
+pad.strokes = [];
+pad.pen = false;
+pad.arming = false;
+rest(900, 300, 300); // il puntatore è sulla cella, fuori dall'area
+let waits = [];
+pad.onWait = (w) => waits.push(w);
+pad.requestPen();
+assert.equal(pad.waiting, true, "scelta la cella la penna è pronta e aspetta");
+rest(900, 300, 2000); // resta sulla cella a lungo: niente preparazione
+assert.equal(pad.arming, false, "fuori dall'area la preparazione non parte");
+assert.equal(pad.pen, false);
+move(500, 300, 200); // rientra
+assert.equal(pad.arming, true, "al rientro parte la preparazione");
+assert.equal(pad.waiting, false);
+rest(500, 300, 500);
+assert.equal(pad.pen, false, "dopo 0,5 s la preparazione non è finita");
+rest(500, 300, 500);
+assert.equal(pad.pen, true, "finita la preparazione la penna scende");
+move(900, 300, 200); // esce dall'area: si alza
+assert.equal(pad.pen, false, "uscendo dall'area la penna si alza");
+assert.deepEqual(waits, [true, false], "la cella viene avvisata (pronta, poi non più pronta)");
+
+// Uscire durante la preparazione: si torna ad aspettare il rientro.
+pad.requestPen();
+move(500, 300, 200);
+assert.equal(pad.arming, true);
+move(900, 300, 200);
+assert.equal(pad.arming, false);
+assert.equal(pad.waiting, true, "uscita durante la preparazione: si riaspetta il rientro");
+// Scegliere di nuovo la cella annulla.
+pad.requestPen();
+assert.equal(pad.waiting, false, "seconda scelta: annullata");
+
+// 10) Alzare la penna con un gesto toglie dalla fine del tratto i punti disturbati dal gesto.
+pad.penMode = "wink";
+pad.strokes = [];
+pad.pen = false;
+pad.arming = false;
+move(100, 100, 100);
+pad.togglePen(t); // preparazione
+rest(100, 100, 900); // penna giù
+assert.equal(pad.pen, true);
+move(400, 100, 600); // tratto regolare
+const gestureAt = t;
+for (let k = 0; k < 8; k++, t += FRAME) { gaze = { x: 400, y: 100 + k * 12 }; pad.step(t); } // il gesto sposta il puntatore
+pad.togglePen(t, 270); // alza, togliendo gli ultimi 270 ms
+const kept = pad.strokes.at(-1);
+assert.equal(pad.pen, false);
+assert.ok(kept.every(([, y]) => y < 130), "i punti spostati dal gesto non sono nel tratto");
+assert.ok(kept.at(-1)[0] > 380, "il tratto regolare resta");
+void gestureAt;
+
 console.log("ok");

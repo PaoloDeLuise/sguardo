@@ -89,6 +89,12 @@ export class GazeTracker {
     // Posizione e orientamento della testa: [tx, ty, tz, yaw, pitch].
     const pose = m ? [m[12], m[13], m[14], m[8], m[9]] : null;
 
-    return { t, face: true, blink, wink, features, pose, raw };
+    // Per i gesti della scrittura a mano: occhi (sinistro, destro), bocca aperta, inclinazione della
+    // testa di lato in gradi (rotazione attorno all'asse della fotocamera).
+    const eyes = [bs.eyeBlinkLeft ?? 0, bs.eyeBlinkRight ?? 0];
+    const jaw = bs.jawOpen ?? 0;
+    const roll = m ? (Math.atan2(m[1], m[0]) * 180) / Math.PI : null;
+
+    return { t, face: true, blink, wink, eyes, jaw, roll, features, pose, raw };
   }
 }

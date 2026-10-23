@@ -1,11 +1,14 @@
 // Scrittura a mano: il puntatore (testa, occhi o entrambi) disegna una lettera o una parola.
 //
 // Un puntatore non ha "pulsante": la penna si abbassa e si alza in uno di due modi (penMode):
-// - "wink": con un occhiolino (main.js chiama togglePen). Per abbassare la penna non basta un
-//   istante: dopo l'occhiolino c'è una preparazione di `startDelayMs` in cui un puntatore
-//   "fantasma" mostra dove partirà il tratto, e ci si può posizionare meglio; la penna scende
-//   alla fine, dove si trova il puntatore. Un altro occhiolino durante la preparazione annulla.
-//   Per alzare la penna l'occhiolino vale subito;
+// - un gesto (occhiolino, bocca aperta, inclinazione della testa: gestures.js, main.js chiama
+//   togglePen). Per abbassare la penna non basta un istante: dopo il gesto c'è una preparazione
+//   di `startDelayMs` in cui un puntatore "fantasma" mostra dove partirà il tratto, e ci si può
+//   posizionare meglio; la penna scende alla fine, dove si trova il puntatore. Un altro gesto
+//   durante la preparazione annulla. Per alzare la penna il gesto vale subito;
+// - "cell": una cella "Penna" accanto al disegno (requestPen). La preparazione parte da quando
+//   il puntatore rientra nell'area di disegno, non da quando si è scelta la cella; uscendo
+//   dall'area la penna si alza e, se la preparazione era in corso, si torna ad aspettare il rientro;
 // - "still": stando fermi per `stillMs` (un cerchio si riempie attorno al puntatore). Nel momento
 //   del cambio il puntatore è fermo, quindi il tratto parte esattamente da lì;
 // - penna abbassata: ogni fotogramma aggiunge un punto al tratto;
@@ -26,13 +29,15 @@ const PALETTES = {
 export class DrawPad {
   // getGaze(): {x, y} in pixel della finestra o null; isPaused(): occhi chiusi.
   // onDrawing(strokes): tratti [[x, y], ...] relativi all'area, quando il disegno è finito.
-  // onPen(down): la penna è cambiata (per il colore del puntatore).
-  constructor(canvas, { getGaze, isPaused, onDrawing, onPen }) {
+  // onPen(down): la penna è cambiata (per il colore del puntatore). onWait(waiting): la cella "Penna" è pronta o no.
+  constructor(canvas, { getGaze, isPaused, onDrawing, onPen, onWait }) {
     this.canvas = canvas;
-    Object.assign(this, { getGaze, isPaused, onDrawing, onPen });
+    Object.assign(this, { getGaze, isPaused, onDrawing, onPen, onWait });
     this.gapMs = 2000;
     this.stillMs = 700;
     this.startDelayMs = 800;
+    this.level = null;   // livello del gesto scelto (1 = soglia), per la barra; null = nessun gesto
+    this.levelLabel = "";
     this.penMode = "wink";
     this.palette = PALETTES.dark;
     this.running = false;
@@ -53,7 +58,8 @@ export class DrawPad {
     this.stillSince = 0;
     this.armed = true;   // dopo un cambio di penna serve un movimento prima del successivo
     this.progress = 0;
-    this.arming = false; // preparazione dell'abbassamento (occhiolino): ancora nessun segno
+    this.arming = false; // preparazione dell'abbassamento (gesto o cella): ancora nessun segno
+    this.waiting = false; // modo "cell": scelta la cella, si aspetta il rientro nell'area
     this.armedAt = 0;
     this.flashUntil = 0;
     this.flashText = "";
@@ -92,9 +98,19 @@ export class DrawPad {
     return Math.max(14, Math.min(this.rect.width, this.rect.height) * 0.025);
   }
 
-  // Occhiolino: alza la penna subito; a penna alzata comincia (o annulla) la preparazione.
-  togglePen(t = performance.now()) {
-    if (this.pen) return this.setPen(false, t);
+  // Cella "Penna": a penna alzata si aspetta il rientro nell'area (poi la preparazione), oppure si annulla.
+  requestPen() {
+    if (this.pen) return;
+    this.waiting = !this.waiting && !this.arming;
+    this.arming = false;
+    this.progress = 0;
+    this.onWait?.(this.waiting);
+  }
+
+  // Gesto: alza la penna subito (togliendo da fine tratto gli ultimi backMs, disturbati dal gesto);
+  // a penna alzata comincia (o annulla) la preparazione.
+  togglePen(t = performance.now(), backMs = 0) {
+    if (this.pen) return this.setPen(false, t, backMs);
     if (this.arming) {
       this.arming = false;
       this.progress = 0;
@@ -106,14 +122,18 @@ export class DrawPad {
     }
   }
 
-  setPen(down, t = performance.now()) {
+  setPen(down, t = performance.now(), backMs = 0) {
     if (down === this.pen) return;
     this.pen = down;
     this.penUpAt = t;
     if (down) {
       const c = this.cursor;
-      this.strokes.push(c ? [[c.x, c.y]] : []);
-    } else if (this.strokes.at(-1)?.length < 2) {
+      this.strokes.push(c ? [[c.x, c.y, t]] : []);
+    } else {
+      const stroke = this.strokes.at(-1);
+      while (backMs && stroke.length > 2 && stroke.at(-1)[2] > t - backMs) stroke.pop();
+    }
+    if (!down && this.strokes.at(-1)?.length < 2) {
       this.strokes.pop(); // tratto fatto di un solo punto
     }
     this.onPen?.(down);
@@ -128,6 +148,15 @@ export class DrawPad {
     if (!inside && this.arming) {
       this.arming = false;
       this.penUpAt = t;
+      if (this.penMode === "cell") { this.waiting = true; this.onWait?.(true); } // si ricomincia al rientro
+    }
+    if (inside && this.waiting) {
+      // Rientrati nell'area: la preparazione parte adesso, per avere il tempo di posizionarsi.
+      this.waiting = false;
+      this.arming = true;
+      this.armedAt = t;
+      this.progress = 0;
+      this.onWait?.(false);
     }
 
     const c = this.cursor;
@@ -138,7 +167,7 @@ export class DrawPad {
       if (this.pen) {
         const stroke = this.strokes.at(-1);
         const last = stroke.at(-1);
-        if (!last || Math.hypot(c.x - last[0], c.y - last[1]) >= MIN_POINT_GAP_PX) stroke.push([c.x, c.y]);
+        if (!last || Math.hypot(c.x - last[0], c.y - last[1]) >= MIN_POINT_GAP_PX) stroke.push([c.x, c.y, t]);
       }
       if (!this.pointerPens && this.penMode === "still") this.watchStill(c, t);
       if (this.arming) {
@@ -246,22 +275,50 @@ export class DrawPad {
       ctx.stroke();
     }
 
+    // Rientro atteso: bordo tratteggiato attorno all'area.
+    if (this.waiting) {
+      ctx.strokeStyle = p.penUp;
+      ctx.lineWidth = 4;
+      ctx.setLineDash([14, 10]);
+      ctx.strokeRect(3, 3, W - 6, H - 6);
+      ctx.setLineDash([]);
+    }
+
+    // Barra di livello del gesto scelto: quanto lo si sta facendo rispetto alla soglia (il segno).
+    if (this.level != null) {
+      const w = Math.min(W * 0.5, 320), x = 16, y = H - 34, max = 1.5;
+      ctx.fillStyle = p.frame;
+      ctx.fillRect(x, y, w, 12);
+      ctx.fillStyle = this.level >= 1 ? p.ink : p.text;
+      ctx.fillRect(x, y, w * Math.min(1, this.level / max), 12);
+      ctx.fillStyle = p.penUp;
+      ctx.fillRect(x + w / max - 1, y - 5, 3, 22);
+      ctx.font = "13px system-ui, sans-serif";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = p.text;
+      ctx.fillText(`${this.levelLabel}: oltre il segno scatta`, x, y - 8);
+      ctx.textBaseline = "top";
+    }
+
     // Stato della penna e, a penna alzata con un disegno da finire, il tempo che manca.
     ctx.font = `${Math.max(14, Math.min(22, W / 40))}px system-ui, sans-serif`;
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillStyle = this.pen ? p.ink : p.penUp;
-    const how = this.pointerPens ? "tieni premuto" : this.penMode === "wink" ? "fai un occhiolino" : "fermo un attimo";
-    const up = this.pointerPens ? "rilascia" : this.penMode === "wink" ? "occhiolino" : "fermo un attimo";
-    ctx.fillText(this.arming ? "✎ posizionati: la penna sta per scendere (occhiolino per annullare)"
+    const GESTURES = { wink: "fai un occhiolino", mouth: "apri la bocca", tilt: "inclina la testa" };
+    const how = this.pointerPens ? "tieni premuto" : this.penMode === "still" ? "fermo un attimo" : this.penMode === "cell" ? "scegli «Penna» e rientra qui" : GESTURES[this.penMode];
+    const up = this.pointerPens ? "rilascia" : this.penMode === "still" ? "fermo un attimo" : this.penMode === "cell" ? "esci dall'area" : `${GESTURES[this.penMode]} di nuovo`;
+    const cancel = this.penMode === "cell" ? "esci dall'area per annullare" : "ripeti il gesto per annullare";
+    ctx.fillText(this.waiting ? "✎ penna pronta: torna nell'area di disegno, la preparazione parte quando rientri"
+      : this.arming ? `✎ posizionati: la penna sta per scendere (${cancel})`
       : this.pen ? `✎ penna abbassata: disegna (${up} per alzarla)` : `✎ penna alzata: ${how} per scrivere`, 16, 14);
-    if (!this.pen && !this.arming && this.strokes.length) {
+    if (!this.pen && !this.arming && !this.waiting && this.strokes.length) {
       const left = Math.max(0, 1 - (now - this.penUpAt) / this.gapMs);
       ctx.fillStyle = p.frame;
       ctx.fillRect(16, 46, W - 32, 6);
       ctx.fillStyle = p.penUp;
       ctx.fillRect(16, 46, (W - 32) * left, 6);
-    } else if (!this.strokes.length && !this.pen && !this.arming) {
+    } else if (!this.strokes.length && !this.pen && !this.arming && !this.waiting) {
       ctx.fillStyle = p.text;
       ctx.fillText("Una lettera, oppure una parola: lettere in fila da sinistra a destra.", 16, 46);
     }
