@@ -1,57 +1,59 @@
 # Sguardo
 
-Scrivere e parlare con gli occhi usando una normale webcam, da PC o telefono.
-Pensato per persone che non possono muoversi né parlare (per esempio con SLA), e per chi le assiste.
+English | [Italiano](README.it.md)
 
-- **Tracciamento dello sguardo nel browser** con MediaPipe Face Landmarker: il video della
-  fotocamera non lascia mai il dispositivo.
-- **Tastiera a due passaggi** con suggerimento delle parole, **frasi rapide** e frasi personali,
-  **scrittura continua** (alla Dasher) come alternativa.
-- **Voce clonata** (facoltativa) dalla voce della persona, con pochi vocali o una registrazione,
-  generata sul PC senza servizi esterni.
-- Si usa tutto con gli occhi: selezione fissando una cella, menu chiudendo gli occhi per 2 secondi,
-  ricalibrazione automatica quando la persona cambia postura.
+Write and speak with your eyes using an ordinary webcam, on a PC or a phone.
+Designed for people who cannot move or speak (for example with ALS), and for those who care for them.
 
-## Cosa serve
+- **Gaze tracking in the browser** with MediaPipe Face Landmarker: the camera video never leaves
+  the device.
+- **Two-step keyboard** with word suggestions, **quick phrases** and personal phrases,
+  **continuous writing** (Dasher-style) as an alternative.
+- **Cloned voice** (optional) from the person's own voice, using a few voice messages or a recording,
+  generated on your PC without any external service.
+- Everything can be used with the eyes: select by fixating on a cell, open the menu by closing the
+  eyes for 2 seconds, automatic recalibration when the person changes posture.
 
-| Per | Serve |
+## What you need
+
+| For | You need |
 |---|---|
-| Usare Sguardo | Un browser recente (Chrome, Edge, Firefox, Safari) e una webcam qualsiasi, anche quella del portatile o del telefono |
-| Avviarlo sul proprio PC | [Python](https://www.python.org/downloads/) 3.10–3.13 (provato con 3.12), solo per servire i file |
-| La voce clonata (facoltativa) | Python 3.10–3.13, [ffmpeg](https://ffmpeg.org/download.html), circa 4 GB di spazio (librerie + modello), un PC qualsiasi: non serve una scheda grafica |
-| Gli strumenti di analisi (facoltativi) | [Node.js](https://nodejs.org/) 20 o successivo |
+| Using Sguardo | A recent browser (Chrome, Edge, Firefox, Safari) and any webcam, including a laptop or phone camera |
+| Running it on your own PC | [Python](https://www.python.org/downloads/) 3.10–3.13 (tested with 3.12), only to serve the files |
+| The cloned voice (optional) | Python 3.10–3.13, [ffmpeg](https://ffmpeg.org/download.html), about 4 GB of disk space (libraries + model), any PC: no graphics card needed |
+| The analysis tools (optional) | [Node.js](https://nodejs.org/) 20 or later |
 
-**Python non è obbligatorio.** La parte che segue gli occhi, la tastiera e i suggerimenti è una
-pagina web statica: funziona con qualunque server di file, per esempio GitHub Pages, e in quel
-caso usa la voce del browser. Python serve solo per avviarla sul proprio PC con `serve.py` e per
-la voce clonata.
+**Python is not required.** The part that follows the eyes, the keyboard and the suggestions is a
+static web page: it works with any file server, for example GitHub Pages, and in that case it uses
+the browser's voice. Python is only needed to run it on your own PC with `serve.py` and for the
+cloned voice.
 
-## Installazione
+## Installation
 
 ```
 git clone https://github.com/PaoloDeLuise/sguardo.git
 cd sguardo
 ```
 
-(oppure scarica lo ZIP del repository e decomprimilo).
+(or download the repository ZIP and unzip it).
 
-### Solo tracciamento e tastiera
+### Tracking and keyboard only
 
-Non c'è niente da installare: basta Python.
+There is nothing to install: Python is enough.
 
 ```
 python serve.py
 ```
 
-e apri **http://localhost:8000**. Su macOS e Linux il comando può essere `python3`.
+and open **http://localhost:8000**. On macOS and Linux the command may be `python3`.
 
-### Con la voce clonata
+### With the cloned voice
 
-1. Installa ffmpeg:
-   - Windows: `winget install Gyan.FFmpeg` (poi riapri il terminale)
+1. Install ffmpeg:
+   - Windows: `winget install Gyan.FFmpeg` (then reopen the terminal)
    - macOS: `brew install ffmpeg`
    - Linux (Debian/Ubuntu): `sudo apt install ffmpeg`
-2. Crea un ambiente Python separato e installa le dipendenze (circa 1,5 GB):
+2. Create a separate Python environment and install the dependencies (about 1.5 GB):
 
    Windows:
    ```
@@ -65,283 +67,331 @@ e apri **http://localhost:8000**. Su macOS e Linux il comando può essere `pytho
    .venv-voce/bin/python -m pip install -r requirements-voce.txt
    .venv-voce/bin/python serve.py
    ```
-3. Apri **http://localhost:8000**. Nella sezione **Voce** della schermata iniziale:
-   1. accetta la licenza del modello XTTS-v2 (solo uso non commerciale, vedi [Licenze](#licenze)):
-      solo allora il modello (circa 1,8 GB) viene scaricato, una volta sola;
-   2. scegli 10–30 secondi di vocali della persona (vanno bene quelli di WhatsApp) oppure
-      premi **Registra** e leggi il testo proposto;
-   3. premi **Clona la voce**, poi prova una frase con **Ascolta**.
+3. Open **http://localhost:8000**. In the **Voice** section of the start screen:
+   1. accept the XTTS-v2 model license (non-commercial use only, see [Licenses](#licenses)):
+      only then is the model (about 1.8 GB) downloaded, just once;
+   2. choose 10–30 seconds of the person's voice messages (WhatsApp ones are fine) or
+      press **Record** and read the text shown;
+   3. press **Clone the voice**, then try a phrase with **Listen**.
 
-   Più vocali puliti rendono il timbro più stabile (fino a circa 30 secondi migliora anche
-   l'intonazione). I campioni si sommano: **Elimina voce** riparte da zero.
+   More clean voice messages make the timbre more stable (up to about 30 seconds the intonation
+   improves too). Samples add up: **Delete voice** starts again from zero.
 
-Da quel momento `serve.py` va avviato sempre con il Python di `.venv-voce`.
+From then on, `serve.py` must always be started with the Python from `.venv-voce`.
 
-## Dal telefono o dal tablet
+## From a phone or tablet
 
-La fotocamera nel browser funziona solo da `localhost` o in **HTTPS**. Tre modi:
+The camera in the browser only works from `localhost` or over **HTTPS**. Three ways:
 
-1. **Sito pubblicato (il più semplice, senza voce clonata).** Pubblica il repository con
-   GitHub Pages (*Settings → Pages → Deploy from a branch → main*) e apri l'indirizzo dal telefono.
-   GitHub Pages è gratuito per i repository pubblici.
-2. **Dal PC sulla stessa Wi-Fi (anche con la voce clonata).** Serve il pacchetto `cryptography`
-   per creare il certificato (già incluso se hai installato la voce):
+1. **Published site (the simplest, without the cloned voice).** Publish the repository with
+   GitHub Pages (*Settings → Pages → Deploy from a branch → main*) and open the address from the phone.
+   GitHub Pages is free for public repositories.
+2. **From the PC on the same Wi-Fi (also with the cloned voice).** You need the `cryptography`
+   package to create the certificate (already included if you installed the voice):
    ```
    python -m pip install -r requirements.txt
    python serve.py --https
    ```
-   stampa un indirizzo `https://<ip-del-pc>:8443` da aprire sul telefono. Il certificato è
-   autofirmato: il browser mostra un avviso da accettare. Se il telefono non raggiunge il PC:
-   - Windows blocca le connessioni in entrata sulle reti "pubbliche": imposta la Wi-Fi come rete
-     privata, oppure consenti Python nel firewall;
-   - alcune reti (aziendali, ospiti) isolano i dispositivi tra loro: in quel caso usa il modo 3.
+   prints an address `https://<ip-of-the-pc>:8443` to open on the phone. The certificate is
+   self-signed: the browser shows a warning that you need to accept. If the phone cannot reach the PC:
+   - Windows blocks incoming connections on "public" networks: set the Wi-Fi as a private
+     network, or allow Python in the firewall;
+   - some networks (corporate, guest) isolate devices from each other: in that case use way 3.
 
-   Dal telefono la voce clonata si usa, ma si prepara e si modifica solo dal PC.
-3. **Tunnel HTTPS** (per esempio `cloudflared tunnel --url http://localhost:8000`): funziona da
-   qualunque rete, ma rende la pagina raggiungibile da internet finché il tunnel è aperto.
+   The cloned voice can be used from the phone, but it is prepared and edited only from the PC.
+3. **HTTPS tunnel** (for example `cloudflared tunnel --url http://localhost:8000`): works from
+   any network, but makes the page reachable from the internet for as long as the tunnel is open.
 
-Sugli schermi piccoli la barra per chi assiste si nasconde (si riapre con ⚙), in verticale la
-griglia diventa 3×4 e la scrittura continua mette le lettere sul lato lungo dello schermo.
-Un tablet resta più comodo: celle più grandi rispetto all'errore dello sguardo.
-Sul telefono lo sfondo è chiaro: lo schermo vicino al viso lo illumina, la fotocamera amplifica
-meno il segnale e i punti del viso sono meno rumorosi. Dal menu: **Sfondo automatico / chiaro /
-scuro** (cambiandolo conviene ricalibrare, perché cambia la luce sul viso).
+On small screens the caregiver bar is hidden (it reopens with ⚙), in portrait the grid becomes
+3×4 and continuous writing places the letters along the long side of the screen.
+A tablet is still more comfortable: cells are larger relative to the gaze error.
+On a phone the background is light: the screen close to the face lights it up, the camera amplifies
+the signal less and the face points are less noisy. From the menu: **Background: automatic /
+light / dark** (after changing it, it is best to recalibrate, because the light on the face changes).
 
-Il telefono va fissato su un supporto, all'altezza degli occhi, e non va tenuto in mano: ogni
-spostamento del telefono cambia la stima come uno spostamento della testa. Verticale e
-orizzontale hanno calibrazioni separate: girando il telefono parte da sola la ricalibrazione
-(completa la prima volta, rapida le successive). Anche quando la finestra cambia dimensione
-(la barra degli indirizzi che compare, lo schermo intero che si chiude) Sguardo propone di
-ricalibrare. Accanto alla miniatura della fotocamera si vedono i fotogrammi al secondo: sotto
-15 circa lo sguardo trema di più.
+The phone should be fixed on a stand, at eye level, and not held in the hand: every movement of
+the phone changes the estimate like a movement of the head. Portrait and landscape have separate
+calibrations: when you rotate the phone, recalibration starts by itself (full the first time, quick
+afterwards). Also when the window changes size (the address bar appearing, full screen closing)
+Sguardo offers to recalibrate. Next to the camera thumbnail you can see the frames per second:
+below about 15 the gaze jitters more.
 
-## Uso
+## Usage
 
-Chi assiste preme **Avvia fotocamera** una volta (il browser lo richiede). Da lì in poi tutto si fa
-con gli occhi.
+The caregiver presses **Start camera** once (the browser requires it). From then on everything is
+done with the eyes.
 
-1. **Calibrazione.** La prima volta si segue con gli occhi il punto che scivola da una posizione
-   all'altra, fissandolo quando si ferma (circa 50 secondi). Le volte successive basta una
-   **ricalibrazione rapida** di 10 secondi: il modello usa anche le calibrazioni salvate, pesate per
-   quanto la loro postura somiglia a quella di adesso. Alla fine si sceglie **Continua** o
-   **Ricalibra** fissando la cella (dopo 10 secondi si prosegue da soli).
-2. **Tastiera.** Si fissa un gruppo di lettere (1 secondo), poi la lettera.
-   - La prima riga propone tre parole; i suggerimenti imparano dalle frasi della persona.
-   - **Parla** legge la frase; a testo vuoto diventa **Ripeti**.
-   - **Cancella** toglie una lettera; continuando a guardarla toglie una parola intera ogni 1,5 s.
-   - Numeri e punteggiatura: gruppo **Z J K W X Y / . , ? 123**, poi **123**.
-3. **Frasi.** Dieci frasi per i bisogni (Sì, No, Aiuto, Acqua, Dolore...). In **Le mie frasi** si
-   salva l'ultima frase detta (**Salva**) e si tolgono quelle non più utili.
-4. **Menu: occhi chiusi per 2 secondi.** Ricalibrare, tempo di fissazione, punto visibile,
-   **scrittura continua**: le lettere arrivano dall'alto, affiancate e grandi quanto sono probabili;
-   si guarda in alto, verso la lettera voluta, per avanzare e in basso per tornare indietro (e
-   cancellare). Dal menu si può passare alla versione verticale (lettere da destra).
-5. **Scrittura a mano** (menu → *Scrittura a mano*, o **Scrivi a mano** nella barra, o il tasto `H`):
-   il puntatore disegna una lettera o una parola intera. Pensata per la modalità con la testa, ma
-   vale per tutte. Si attiva solo quando la si sceglie: non cambia nulla per chi usa la tastiera.
-   - **Penna:** un puntatore non ha pulsante. Si **abbassa** in uno di tre modi, a scelta nel menu
-     (*Scrittura a mano* → *Penna*; il livello del gesto si vede in una barra in fondo al
-     disegno, oltre il segno scatta):
-     - **occhiolino** (predefinito): un occhio chiuso per un istante (0,15 s e almeno tre
-       fotogrammi: sul telefono, con pochi fotogrammi al secondo, un guizzo isolato non basta). Un
-       battito con tutti e due gli occhi non conta;
-     - **bocca aperta**: la mandibola è indipendente dal puntatore e il segnale è forte anche con
-       la fotocamera del telefono;
-     - **cella accanto**: si fissa la cella **Penna** e la preparazione parte da quando il
-       puntatore **rientra** nell'area di disegno. Non chiede nessun gesto.
+1. **Calibration.** The first time, the person follows with their eyes the dot that slides from one
+   position to another, fixating on it when it stops (about 50 seconds). Later, a 10-second
+   **quick recalibration** is enough: the model also uses the saved calibrations, weighted by how
+   closely their posture resembles the current one. At the end the person chooses **Continue** or
+   **Recalibrate** by fixating on the cell (after 10 seconds it continues on its own).
+2. **Keyboard.** Fixate on a group of letters (1 second), then on the letter.
+   - The first row offers three words; the suggestions learn from the person's phrases.
+   - **Speak** reads the phrase aloud; when the text is empty it becomes **Repeat**.
+   - **Delete** removes one letter; if you keep looking at it, it removes a whole word every 1.5 s.
+   - Numbers and punctuation: group **Z J K W X Y / . , ? 123**, then **123**.
+3. **Phrases.** Ten phrases for needs (Yes, No, Help, Water, Pain...). In **My phrases** you
+   save the last phrase spoken (**Save**) and remove those that are no longer useful.
+4. **Menu: eyes closed for 2 seconds.** Recalibrate, fixation time, visible dot,
+   **continuous writing**: the letters arrive from the top, side by side and as large as they are
+   probable; you look up, toward the wanted letter, to move forward and down to go back (and
+   delete). From the menu you can switch to the vertical version (letters from the right).
+5. **Handwriting** (menu → *Handwriting*, or **Handwriting** in the bar, or the `H` key):
+   the pointer draws a letter or a whole word. Designed for head mode, but
+   it works in all of them. It is only active when you choose it: nothing changes for those who use the keyboard.
+   - **Pen:** a pointer has no button. The pen goes **down** in one of three ways, chosen in the menu
+     (*Handwriting* → *Pen*; the level of the gesture is shown in a bar at the bottom of the
+     drawing, and the gesture triggers when it passes the mark):
+     - **wink** (default): one eye closed for an instant (0.15 s and at least three
+       frames: on a phone, with few frames per second, an isolated flicker is not enough). A
+       blink with both eyes does not count;
+     - **open mouth**: the jaw is independent of the pointer and the signal is strong even with
+       the phone camera;
+     - **side cell**: you fixate on the **Pen** cell and the preparation starts from when the
+       pointer **re-enters** the drawing area. It requires no gesture.
 
-     **Preparazione:** la penna non scende all'istante. Per 0,8 secondi (regolabile nel menu)
-     compare un puntatore fantasma con un cerchio che si riempie, ci si posiziona con calma e la
-     penna scende alla fine, dove si trova il puntatore. Ripetere il gesto durante la preparazione
-     la annulla (con la cella, uscire dall'area).
+     **Preparation:** the pen does not go down instantly. For 0.8 seconds (adjustable in the menu)
+     a ghost pointer appears with a circle that fills up, you position yourself calmly and the
+     pen goes down at the end, where the pointer is. Repeating the gesture during the preparation
+     cancels it (with the cell, leave the area).
 
-     **Alzare la penna** dipende dal modo:
-     - **occhiolino**: solo con l'occhiolino di nuovo (o uscendo dall'area). Stare fermi non alza
-       niente e uscire dall'area non taglia il tratto;
-     - **bocca aperta**: solo riaprendo la bocca (o uscendo dall'area, senza tagliare niente).
-       Aprire la bocca sposta la testa, e quindi il puntatore, perciò si tolgono dal tratto i
-       punti disegnati *da quando il gesto è cominciato* (non solo da quando è scattato: aprirla
-       lentamente trascina il puntatore per mezzo secondo);
-     - **cella**: da fermi (circa 0,7 s, con un cerchio che si riempie attorno al puntatore e
-       tenendo conto del tremolio), oppure **uscendo dall'area** verso la cella. In quel caso si tolgono i
-       punti del percorso di uscita e il tratto torna all'ultima **pausa** a fine tratto: prima di
-       andare alla cella fermati un attimo dove il tratto finisce (senza pausa si tolgono solo gli
-       ultimi istanti). Il taglio dell'uscita c'è solo in questo modo.
+     **Lifting the pen** depends on the mode:
+     - **wink**: only by winking again (or by leaving the area). Staying still lifts
+       nothing and leaving the area does not cut the stroke;
+     - **open mouth**: only by opening the mouth again (or by leaving the area, without cutting anything).
+       Opening the mouth moves the head, and therefore the pointer, so the points drawn *since
+       the gesture began* are removed from the stroke (not only since it triggered: opening it
+       slowly drags the pointer for half a second);
+     - **cell**: by staying still (about 0.7 s, with a circle that fills up around the pointer and
+       taking tremor into account), or by **leaving the area** toward the cell. In that case the
+       points of the exit path are removed and the stroke goes back to the last **pause** at the end of the stroke: before
+       going to the cell, stop for a moment where the stroke ends (without a pause only the
+       last instants are removed). The exit cut exists only in this mode.
 
-     Con la cella, da fermi la penna si alza solo se prima ci si è mossi: appena abbassata, restare
-     fermi non la rialza. Se si alza troppo spesso mentre pensi, allunga l'attesa nel menu. Con i
-     gesti non c'è nessuna alzata da fermi.
+     With the cell, the pen lifts when still only if you moved first: right after it goes down,
+     staying still does not lift it again. If it lifts too often while you are thinking, lengthen the wait in the menu. With
+     the gestures there is no lifting when still.
 
-     La **soglia** dei gesti si regola nel menu (*Gesto più facile / più difficile*): sul
-     telefono i segnali sono più rumorosi che sul portatile. A penna alzata il puntatore si
-     muove senza lasciare segno.
-   - **Lettera o parola:** si scrivono **lettere staccate in fila da sinistra a destra**. Le lettere
-     si separano da sole dalla posizione (la barra della E o il puntino della I restano con la
-     loro lettera), in qualunque ordine di tratti. Una lettera sola si aggiunge alla parola in
-     corso; più lettere sono una parola e si scrivono con lo spazio. Le lettere a più tratti (E, F,
-     H, T...) si fanno alzando la penna tra un tratto e l'altro.
-   - **Fine del disegno:** passata la *pausa tra i disegni* (2 s, regolabile nel menu) dall'ultimo
-     tratto si legge tutto e si pulisce l'area.
-   - **Riconoscimento:** ogni lettera è confrontata con modelli di lettere ($P), poi la parola
-     è scelta nel dizionario usando tutte le lettere insieme (una R storta dentro «casa» diventa A);
-     un nome fuori dizionario esce com'è scritto. Una lettera sola è aiutata dal linguaggio (dopo
-     «cas» una A è più probabile di una R). Non serve scaricare nulla e gira su qualunque PC
-     (circa 25 ms a lettera). **Non legge la scrittura corsiva**, con le lettere attaccate.
-   - **Correzioni:** accanto al disegno le celle propongono due parole e, subito dopo un disegno,
-     due **alternative** («forse», lettere o parole). Sceglierne una sostituisce ciò che è stato
-     scritto e **insegna** quei disegni a Sguardo, che la volta dopo li riconosce meglio (si
-     dimenticano dal menu). Accenti, numeri e punteggiatura: dalla **Tastiera**.
-   - **Stato della verifica:** provata nell'interfaccia (con il mouse), con disegni sintetici
-     deformati (`node tools/test-recognizer.mjs`, `tools/test-words.mjs`) e con un puntatore
-     simulato per la penna (`tools/test-draw-pen.mjs`), non ancora con una persona che disegna con
-     la testa: la precisione vera dipende dal tremolio del puntatore e si saprà solo provando.
-6. **Cambio di postura.** Se la testa resta spostata o inclinata per più di 3 secondi compare un
-   avviso e dopo 5 secondi parte la ricalibrazione rapida. **Non ora** la rimanda di 3 minuti.
-   (Vale solo con il controllo a occhi: con la testa, muoverla è il comando.)
+     The gesture **threshold** is adjusted in the menu (*Easier gesture / Harder gesture*): on a
+     phone the signals are noisier than on a laptop. With the pen up the pointer
+     moves without leaving a mark.
+   - **Letter or word:** you write **separate letters in a row from left to right**. The letters
+     are separated automatically by position (the bar of the E or the dot of the I stay with
+     their letter), in any order of strokes. A single letter is added to the word in
+     progress; several letters are a word and are written with a space. Multi-stroke letters (E, F,
+     H, T...) are made by lifting the pen between one stroke and the next.
+   - **End of the drawing:** once the *pause between drawings* (2 s, adjustable in the menu) has passed since the last
+     stroke, everything is read and the area is cleared.
+   - **Recognition:** each letter is compared with letter templates ($P), then the word
+     is chosen from the dictionary using all the letters together (a crooked R inside "casa" becomes A);
+     a name that is not in the dictionary comes out as written. A single letter is helped by the language (after
+     "cas" an A is more likely than an R). Nothing needs to be downloaded and it runs on any PC
+     (about 25 ms per letter). **It does not read cursive writing**, with joined letters.
+   - **Corrections:** next to the drawing the cells offer two words and, right after a drawing,
+     two **alternatives** ("maybe", letters or words). Choosing one replaces what was
+     written and **teaches** those drawings to Sguardo, which recognizes them better next time (they are
+     forgotten from the menu). Accents, numbers and punctuation: from the **Keyboard**.
+   - **Verification status:** tested in the interface (with the mouse), with distorted synthetic
+     drawings (`node tools/test-recognizer.mjs`, `tools/test-words.mjs`) and with a simulated
+     pointer for the pen (`tools/test-draw-pen.mjs`), not yet with a person drawing with
+     the head: the real accuracy depends on the pointer's tremor and will only be known by trying.
+6. **Posture change.** If the head stays shifted or tilted for more than 3 seconds a
+   warning appears and after 5 seconds the quick recalibration starts. **Not now** postpones it by 3 minutes.
+   (It only applies to eye control: with the head, moving it is the command.)
 
-### Controllo: occhi, testa o occhi + testa
+### Control: eyes, head or eyes + head
 
-Cosa muove il puntatore si sceglie dalla schermata iniziale, dalla barra per chi assiste o dal menu
-con gli occhi (**Controllo**). Ogni modalità ha la sua calibrazione, la sua cartella di
-calibrazioni salvate e le sue istruzioni: cambiarla avvia una calibrazione (completa la prima volta,
-poi rapida).
+What moves the pointer is chosen from the start screen, from the caregiver bar or from the menu
+with the eyes (**Control**). Each mode has its own calibration, its own folder of
+saved calibrations and its own instructions: changing it starts a calibration (full the first time,
+then quick).
 
-| Modalità | Il puntatore segue | Pensata per |
+| Mode | The pointer follows | Designed for |
 |---|---|---|
-| **Occhi** (predefinita) | lo sguardo, con la testa ferma | chi non può muovere altro |
-| **Testa** | l'orientamento e la posizione del viso, come un puntatore sul naso | chi muove ancora la testa ma ha occhi stanchi o poco precisi |
-| **Occhi + testa** | la testa sposta in modo grossolano, gli occhi rifiniscono | chi ha un po' di entrambi |
+| **Eyes** (default) | the gaze, with the head still | those who cannot move anything else |
+| **Head** | the orientation and position of the face, like a pointer on the nose | those who can still move the head but have tired or imprecise eyes |
+| **Eyes + head** | the head moves it roughly, the eyes refine | those who have a little of both |
 
-- Nella calibrazione il punto va seguito con la testa (o con occhi e testa insieme) e **vanno
-  raggiunti anche gli angoli dello schermo**: l'ampiezza del movimento è personale e la impara
-  da lì.
-- Con la testa la posizione di riposo deriva e il collo si stanca: **Ricentra** (menu) chiede di
-  puntare il centro dello schermo per 3 secondi e vi riporta la posizione stimata.
-- **Stato della verifica:** le modalità con la testa sono state provate solo con dati sintetici e
-  nell'interfaccia, non con persone che muovono la testa. Le registrazioni raccolte finora sono a
-  testa ferma, quindi `node tools/evaluate.mjs --modes` non dice nulla sulla modalità "testa" (368 px,
-  nessun movimento da cui imparare); mostra invece che aggiungere la posizione della testa agli
-  occhi, a testa ferma, non peggiora la stima (104 px contro 103 px dei soli occhi). Per misurarla
-  davvero servono calibrazioni fatte muovendo la testa, salvate con **Salva dati**.
+- During calibration the dot must be followed with the head (or with eyes and head together) and
+  **the corners of the screen must be reached too**: the range of movement is personal and the system learns it
+  from there.
+- With the head the resting position drifts and the neck gets tired: **Recenter** (menu) asks you to
+  point at the center of the screen for 3 seconds and brings the estimated position back there.
+- **Verification status:** the head modes have been tested only with synthetic data and
+  in the interface, not with people moving their heads. The recordings collected so far are with
+  the head still, so `node tools/evaluate.mjs --modes` says nothing about the "head" mode (368 px,
+  no movement to learn from); it does show instead that adding head position to the
+  eyes, with the head still, does not worsen the estimate (104 px against 103 px for eyes alone). To measure it
+  properly, calibrations made while moving the head are needed, saved with **Save data**.
 
-I battiti di ciglia normali non interrompono la fissazione, e nemmeno il tremolio dello sguardo:
-ogni cella accumula "prove" quando lo sguardo ci cade vicino e le perde lentamente quando non la
-si guarda, quindi un'uscita breve non fa ripartire da zero. Mentre si guarda si vedono riempirsi
-le celle candidate; quella in vantaggio è evidenziata.
+Normal blinks do not interrupt fixation, and neither does gaze jitter:
+each cell accumulates "evidence" when the gaze falls near it and slowly loses it when it is not
+being looked at, so a brief exit does not restart from zero. While looking you see the candidate
+cells fill up; the one in the lead is highlighted.
 
-**Per chi assiste:**
+**For caregivers:**
 
-- clic su un punto mentre la persona lo guarda = un punto di calibrazione in più (cerchio verde;
-  grigio se l'occhio si stava muovendo). Il clic destro calibra senza selezionare nulla;
-- tasti: `C` calibrazione completa, `R` rapida, `M` menu, `D` scrittura continua, `H` scrittura a mano, `P` punto,
-  `Esc` interrompe la calibrazione;
-- **Nuova persona** cancella le calibrazioni salvate (quando Sguardo passa a un'altra persona);
-- `http://localhost:8000/?mouse`: il mouse fa le veci dello sguardo, per provare senza fotocamera.
+- clicking on a point while the person is looking at it = one more calibration point (green circle;
+  gray if the eye was moving). Right-click calibrates without selecting anything;
+- keys: `C` full calibration, `R` quick, `M` menu, `D` continuous writing, `H` handwriting, `P` dot,
+  `Esc` interrupts the calibration;
+- **New person** deletes the saved calibrations (when Sguardo passes to another person);
+- `http://localhost:8000/?mouse`: the mouse stands in for the gaze, to try without a camera.
 
-### Tempi della voce clonata
+### Cloned voice timings
 
-Misurati su un portatile i7-1255U senza scheda grafica: avvio del modello 18 s (una volta),
-clonazione 1–2 s, frase breve 3–5 s, in generale circa 2,5 volte la durata della frase. Su PC più
-lenti i tempi crescono in proporzione. Per non far aspettare la persona:
+Measured on an i7-1255U laptop without a graphics card: model startup 18 s (once),
+cloning 1–2 s, short phrase 3–5 s, in general about 2.5 times the duration of the phrase. On slower
+PCs the times grow in proportion. To avoid making the person wait:
 
-- le frasi rapide e quelle salvate sono generate una volta e conservate (poi partono in 0,2 s);
-- mentre la persona scrive, la frase viene preparata a ogni parola finita;
-- il modello è compresso a 8 bit (circa 30% più veloce; `SGUARDO_INT8=0` lo disattiva);
-- se la voce clonata non risponde si usa la voce del browser.
+- quick phrases and saved ones are generated once and stored (then they start in 0.2 s);
+- while the person writes, the phrase is prepared at every finished word;
+- the model is compressed to 8 bits (about 30% faster; `SGUARDO_INT8=0` turns it off);
+- if the cloned voice does not respond, the browser's voice is used.
 
-## Privacy e sicurezza
+## Privacy and security
 
-- **Video:** elaborato solo nel browser; non viene salvato né inviato.
-- **Dati salvati nel browser** (`localStorage`): calibrazioni, impostazioni, parole e frasi della
-  persona. **Nuova persona** cancella le calibrazioni; i dati del sito si cancellano dalle
-  impostazioni del browser.
-- **Dati salvati sul PC** (solo con `serve.py`): `voce/` (vocali, voce clonata, frasi generate;
-  quelle scritte restano solo le ultime 100) e `recordings/` (calibrazioni salvate con **Salva dati**,
-  contengono i punti del viso). Entrambe le cartelle sono escluse dal repository e `serve.py` non
-  le serve mai.
-- **Connessioni esterne:** solo per scaricare MediaPipe (jsDelivr), il modello del viso (Google) e,
-  una volta, il modello della voce. La pagina ha una Content Security Policy che non permette altro.
-- **`serve.py`:** accetta richieste solo dalla pagina di Sguardo (controllo di `Host` e `Origin` e
-  intestazione `X-Sguardo`, contro richieste da altri siti e DNS rebinding). Le operazioni che
-  modificano dati (vocali, clonazione, registrazioni) sono permesse solo dal PC stesso. È un server
-  pensato per uso personale, non per essere esposto su internet.
-- Usare la voce di una persona richiede il suo consenso (o quello di chi la rappresenta).
+- **Video:** processed only in the browser; it is neither saved nor sent.
+- **Data saved in the browser** (`localStorage`): calibrations, settings, the person's words and
+  phrases. **New person** deletes the calibrations; the site data is deleted from the
+  browser settings.
+- **Data saved on the PC** (only with `serve.py`): `voce/` (voice messages, cloned voice, generated phrases;
+  of the written ones only the last 100 are kept) and `recordings/` (calibrations saved with **Save data**,
+  they contain the face points). Both folders are excluded from the repository and `serve.py` never
+  serves them.
+- **External connections:** only to download MediaPipe (jsDelivr), the face model (Google) and,
+  once, the voice model. The page has a Content Security Policy that allows nothing else.
+- **`serve.py`:** accepts requests only from the Sguardo page (check of `Host` and `Origin` and
+  the `X-Sguardo` header, against requests from other sites and DNS rebinding). Operations that
+  modify data (voice messages, cloning, recordings) are allowed only from the PC itself. It is a server
+  meant for personal use, not for being exposed to the internet.
+- Using a person's voice requires their consent (or that of their representative).
 
-## Licenze
+## Licenses
 
-| Componente | Licenza |
+| Component | License |
 |---|---|
-| Codice di Sguardo | [GNU AGPL-3.0](LICENSE) |
-| MediaPipe Face Landmarker (caricato dal browser) | Apache 2.0 |
-| `data/parole-it.txt` (da FrequencyWords) | CC BY-SA 4.0, vedi `data/LICENSE-parole-it.txt` |
-| coqui-tts (installata a parte) | MPL-2.0 |
-| Modello XTTS-v2 (scaricato a parte) | [Coqui Public Model License](https://coqui.ai/cpml): **solo uso non commerciale** |
+| Sguardo code | [GNU AGPL-3.0](LICENSE) |
+| MediaPipe Face Landmarker (loaded by the browser) | Apache 2.0 |
+| `data/parole-it.txt` (from FrequencyWords) | CC BY-SA 4.0, see `data/LICENSE-parole-it.txt` |
+| `data/words-en.txt` (from FrequencyWords) | CC BY-SA 4.0, see `data/LICENSE-words-en.txt` |
+| `data/words-es.txt` (from FrequencyWords) | CC BY-SA 4.0, see `data/LICENSE-words-es.txt` |
+| `data/words-fr.txt` (from FrequencyWords) | CC BY-SA 4.0, see `data/LICENSE-words-fr.txt` |
+| `data/words-de.txt` (from FrequencyWords) | CC BY-SA 4.0, see `data/LICENSE-words-de.txt` |
+| `data/words-pt.txt` (from FrequencyWords) | CC BY-SA 4.0, see `data/LICENSE-words-pt.txt` |
+| coqui-tts (installed separately) | MPL-2.0 |
+| XTTS-v2 model (downloaded separately) | [Coqui Public Model License](https://coqui.ai/cpml): **non-commercial use only** |
 
-Il modello XTTS-v2 non è nel repository: chi lo usa ne accetta la licenza dalla pagina.
+The XTTS-v2 model is not in the repository: whoever uses it accepts its license from the page.
 
-Copyright (C) 2026 Paolo De Luise. Sguardo è software libero: puoi ridistribuirlo e modificarlo
-secondo i termini della GNU Affero General Public License versione 3. In breve: chi distribuisce
-una versione modificata, o la offre come servizio online, deve renderne disponibile il codice
-sorgente con la stessa licenza. La licenza riguarda il codice di Sguardo; i componenti elencati
-sopra mantengono le loro (in particolare la voce XTTS-v2 resta solo per uso non commerciale).
+Copyright (C) 2026 Paolo De Luise. Sguardo is free software: you can redistribute it and modify it
+under the terms of the GNU Affero General Public License version 3. In short: whoever distributes
+a modified version, or offers it as an online service, must make the source code available
+under the same license. The license covers the Sguardo code; the components listed
+above keep their own (in particular the XTTS-v2 voice remains for non-commercial use only).
 
-## Sviluppo
+## Development
 
-**Migliorare la precisione con dati reali.** Dopo una calibrazione completa, **Vedi errori** mostra
-dove si guardava e dove il sistema stimava lo sguardo; **Salva dati** scrive in `recordings/` la
-calibrazione e l'archivio. **Ultimo risultato** riapre il risultato finché la pagina resta aperta.
+**Improving accuracy with real data.** After a full calibration, **View errors** shows
+where the person was looking and where the system estimated the gaze; **Save data** writes the
+calibration and the archive to `recordings/`. **Last result** reopens the result as long as the page stays open.
 
 ```
-node tools/evaluate.mjs          # errore dell'algoritmo su tutte le registrazioni
-node tools/evaluate-drift.mjs    # errore dopo un cambio di postura
-node tools/test-posture.mjs      # controllo della postura e archivio
-node tools/test-predictor.mjs    # suggerimento delle parole
-node tools/test-calibration.mjs  # etichette dei dati raccolti con il punto in movimento
-node tools/test-modes.mjs        # modalità occhi / testa / occhi + testa, con dati sintetici
-node tools/evaluate.mjs --modes  # le tre modalità sulle stesse registrazioni
-node tools/test-recognizer.mjs   # lettere disegnate, disegni sintetici (--tune per i pesi; lento)
-node tools/test-words.mjs        # parole disegnate: separazione delle lettere e scelta nel dizionario
-node tools/test-draw-pen.mjs     # penna: preparazione, cella accanto, alzata da fermi, taglio dei punti (puntatore simulato)
-node tools/test-gestures.mjs     # gesti della penna (occhiolino, bocca aperta) con fotogrammi simulati
-node tools/simulate-dasher.mjs   # scrittura continua con uno sguardo simulato (errore ~100 px)
-node tools/simulate-dwell.mjs    # selezione delle celle con uno sguardo simulato, PC e telefono
+node tools/evaluate.mjs          # algorithm error on all the recordings
+node tools/evaluate-drift.mjs    # error after a posture change
+node tools/test-posture.mjs      # posture check and archive
+node tools/test-predictor.mjs    # word suggestion
+node tools/test-calibration.mjs  # labels of the data collected with the moving dot
+node tools/test-modes.mjs        # eyes / head / eyes + head modes, with synthetic data
+node tools/evaluate.mjs --modes  # the three modes on the same recordings
+node tools/test-recognizer.mjs   # drawn letters, synthetic drawings (--tune for the weights; slow)
+node tools/test-words.mjs        # drawn words: letter separation and dictionary choice
+node tools/test-draw-pen.mjs     # pen: preparation, side cell, lifting when still, point cutting (simulated pointer)
+node tools/test-gestures.mjs     # pen gestures (wink, open mouth) with simulated frames
+node tools/test-i18n.mjs         # interface languages: same keys and placeholders, keyboard, word lists
+node tools/simulate-dasher.mjs   # continuous writing with a simulated gaze (error ~100 px)
+node tools/simulate-dwell.mjs    # cell selection with a simulated gaze, PC and phone
 ```
 
-Ogni modifica a `js/features.js`, `js/regression.js` o `js/pool.js` va confrontata su più
-registrazioni, non su una sola: tra una sessione e l'altra cambiano postura e luce.
+Every change to `js/features.js`, `js/regression.js` or `js/pool.js` should be compared across several
+recordings, not just one: posture and light change from one session to the next.
 
-| File | Cosa fa |
+| File | What it does |
 |---|---|
-| `index.html`, `css/style.css` | Pagina e stile |
-| `js/main.js` | Collega tutto: schermate, calibrazione, voce, impostazioni |
-| `js/tracker.js` | Fotocamera + MediaPipe Face Landmarker |
-| `js/features.js` | Caratteristiche per ogni modalità di controllo: iride, palpebra, blendshape, posa della testa |
-| `js/regression.js` | Regressione ridge (pesata) dalle caratteristiche alla posizione sullo schermo |
-| `js/calibration.js` | Punti di calibrazione e verifica, punto che scivola, pulizia dei campioni |
-| `js/pool.js` | Archivio delle calibrazioni, pesato per somiglianza di postura |
-| `js/posture.js` | Riconosce i cambi di postura rispetto all'ultima calibrazione |
-| `js/filter.js` | Filtro One Euro per stabilizzare il punto |
-| `js/board.js` | Griglia di celle con selezione a fissazione |
-| `js/dwell.js` | Scelta della cella: accumulo di prove dallo sguardo (anche nel simulatore) |
-| `js/keyboard.js` | Tastiera a due passaggi, frasi rapide e personali |
-| `js/predictor.js` | Suggerimento parole: frequenze italiane + parole usate dalla persona |
-| `js/dasher.js` | Scrittura continua |
-| `js/draw.js` | Scrittura a mano: area di disegno, penna (si alza e si abbassa stando fermi), fine disegno |
-| `js/gestures.js` | Gesti che abbassano la penna: occhiolino e bocca aperta, con livello e soglia |
-| `js/recognizer.js` | Lettere disegnate ($P), separazione in lettere, parole dal dizionario, lettere imparate |
-| `js/voice.js` | Voce clonata nella pagina (richieste a `serve.py`, memoria delle frasi) |
-| `serve.py` | Server locale: file, voce, registrazioni; `--https` per il telefono |
-| `voice.py` | Clonazione e generazione della voce con XTTS-v2 |
-| `data/parole-it.txt` | 30.000 parole italiane per frequenza |
-| `tools/` | Valutazioni e prove (Node.js) |
+| `index.html`, `css/style.css` | Page and style |
+| `js/main.js` | Ties everything together: screens, calibration, voice, settings |
+| `js/i18n.js` | Translations: loading, language choice, `t()` |
+| `js/locales/` | One file per language |
+| `js/tracker.js` | Camera + MediaPipe Face Landmarker |
+| `js/features.js` | Features for each control mode: iris, eyelid, blendshapes, head pose |
+| `js/regression.js` | (Weighted) ridge regression from the features to the position on the screen |
+| `js/calibration.js` | Calibration and verification points, sliding dot, sample cleaning |
+| `js/pool.js` | Archive of calibrations, weighted by posture similarity |
+| `js/posture.js` | Detects posture changes relative to the last calibration |
+| `js/filter.js` | One Euro filter to stabilize the point |
+| `js/board.js` | Grid of cells with fixation selection |
+| `js/dwell.js` | Cell choice: accumulation of evidence from the gaze (also in the simulator) |
+| `js/keyboard.js` | Two-step keyboard (letter groups and quick phrases come from the language), personal phrases |
+| `js/predictor.js` | Word suggestion: frequencies of the spoken language + words used by the person |
+| `js/dasher.js` | Continuous writing |
+| `js/draw.js` | Handwriting: drawing area, pen (lowered by a gesture or a cell, lifted by the gesture or by staying still), end of drawing |
+| `js/gestures.js` | Gestures that lower the pen: wink and open mouth, with level and threshold |
+| `js/recognizer.js` | Drawn letters ($P), separation into letters, words from the dictionary, learned letters |
+| `js/voice.js` | Cloned voice in the page (requests to `serve.py`, phrase memory) |
+| `serve.py` | Local server: files, voice, recordings; `--https` for the phone |
+| `voice.py` | Voice cloning and generation with XTTS-v2 |
+| `data/parole-it.txt` | 30,000 Italian words by frequency |
+| `data/words-en.txt` | English words by frequency |
+| `data/words-es.txt` | Spanish words by frequency |
+| `data/words-fr.txt` | French words by frequency |
+| `data/words-de.txt` | German words by frequency |
+| `data/words-pt.txt` | Portuguese (Brazil) words by frequency |
+| `tools/` | Evaluations and tests (Node.js) |
 
-## Prossimi passi
+## Languages
 
-- Suggerimento della parola successiva anche senza storico personale (oggi a metà frase propone
-  solo parole frequenti).
-- Una voce più veloce per i PC lenti (la voce clonata usa XTTS-v2, licenza non commerciale).
-- Possibilità di usare Sguardo senza connessione a internet (MediaPipe e modello del viso in locale).
+The interface is available in Italian, English, Spanish, French, German and Portuguese (Brazil). The language is chosen automatically from the
+browser language and can be changed from the start screen or from the assistant toolbar (the page
+reloads). What the person teaches Sguardo — learned words and saved phrases — is kept separately
+for each language. The cloned voice is the same in every language and speaks the language you
+choose (XTTS-v2 supports 17 languages: English, Spanish, French, German, Italian, Portuguese,
+Polish, Turkish, Russian, Dutch, Czech, Arabic, Chinese, Japanese, Hungarian, Korean, Hindi).
 
-Segnalazioni e proposte sono benvenute nelle
-[Issue del repository](https://github.com/PaoloDeLuise/sguardo/issues), soprattutto da chi usa
-Sguardo ogni giorno o assiste chi lo usa.
+To add a language you need two things:
+
+- a file `js/locales/<code>.js` with the interface texts, the quick phrases, the keyboard and the
+  voice codes;
+- a list of words by frequency in `data/`, with its license.
+
+Every language has its own word list in `data/` (`parole-it.txt`, `words-en.txt`, `words-es.txt`,
+`words-fr.txt`, `words-de.txt`, `words-pt.txt`), all from FrequencyWords (CC BY-SA 4.0, see the
+`data/LICENSE-words-*.txt` files).
+
+Known limits of the languages added so far: **German** shows nouns in lowercase (the word list has
+no capital letters; only the start of a sentence is capitalized); **French** treats the apostrophe
+like Italian (`l'` + `homme`), **English** keeps it inside the word (`don't`); **Portuguese** is the
+Brazilian variant; the contractions in the English list were rebuilt from fragments, so their order
+is approximate.
+
+To add a language, copy `js/locales/en.js` to `js/locales/<code>.js`, translate it and register it in
+`js/i18n.js`; then add the word list and run `node tools/test-i18n.mjs`, which checks that every
+text exists with the same placeholders, that the keyboard has all 26 letters and that the word
+list works with the language rules (for example whether the apostrophe is part of a word, as in
+English «don't», or ends it, as in Italian «l'acqua»). Languages with the Latin alphabet work
+as they are: handwriting recognizes the letters A–Z and the suggestions ignore accents.
+Other alphabets need a different recognizer and keyboard.
+
+Have the quick phrases (needs such as pain, bathroom, help) and the interface texts checked by a
+native speaker before relying on them: a mistake there is not just a typo.
+
+## Next steps
+
+- Next-word suggestion even without a personal history (today, mid-sentence, it offers
+  only frequent words).
+- A faster voice for slow PCs (the cloned voice uses XTTS-v2, a non-commercial license).
+- The ability to use Sguardo without an internet connection (MediaPipe and the face model stored locally).
+
+Reports and proposals are welcome in the
+[repository Issues](https://github.com/PaoloDeLuise/sguardo/issues), especially from those who use
+Sguardo every day or care for someone who does.

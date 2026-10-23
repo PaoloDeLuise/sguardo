@@ -3,16 +3,17 @@ import { predict } from "./regression.js";
 import { OneEuro } from "./filter.js";
 import { Aborted, CALIB_POINTS, Calibrator, QUICK_POINTS, VALIDATION_POINTS, cleanSamples } from "./calibration.js";
 import { DwellBoard } from "./board.js";
-import { Keyboard, DEFAULT_PHRASES, display } from "./keyboard.js";
-import { API_HEADERS, ClonedVoice } from "./voice.js";
+import { Keyboard, defaultPhrases, display } from "./keyboard.js";
+import { LOCALES, detectLanguage, locale, setLanguage, t, translatePage } from "./i18n.js";
+import { API_HEADERS, ClonedVoice, voiceLanguage } from "./voice.js";
 import { Dasher, LetterModel } from "./dasher.js";
 import { DrawPad } from "./draw.js";
 import { GESTURE_MODES, GestureDetector } from "./gestures.js";
 import { Lexicon, addPersonal, groupLetters, priorFromChildren, recognize, recognizeWord } from "./recognizer.js";
-import { Predictor } from "./predictor.js";
+import { Predictor, normalize } from "./predictor.js";
 import { CalibrationPool } from "./pool.js";
 import { PostureMonitor, meanPose } from "./posture.js";
-import { CLEAN_INDICES, CONTROL_LABELS, CONTROL_MODES, STABILITY } from "./features.js";
+import { CLEAN_INDICES, CONTROL_MODES, STABILITY } from "./features.js";
 
 const $ = (s) => document.querySelector(s);
 const POOL_KEY = "sguardo.calibrazioni.v1";
@@ -27,8 +28,9 @@ const SNOOZE_MS = 180_000;            // dopo "Non ora"
 const PROMPT_SECONDS = 5;             // conto alla rovescia prima della ricalibrazione rapida
 const RESULT_AUTO_SECONDS = 10;       // dopo la calibrazione si prosegue da soli
 // Come si abbassa la penna della scrittura a mano: un gesto (gestures.js) o una cella accanto al
-// disegno. Ordine del menu.
-const PEN_MODES = { wink: "occhiolino", mouth: "bocca aperta", cell: "cella accanto" };
+// disegno. Ordine del menu; i nomi sono nella lingua in uso (penmode.*).
+const PEN_MODES = ["wink", "mouth", "cell"];
+const penLabel = (m) => t(`penmode.${m}`);
 const RESULT_GRACE_MS = 3000;         // all'apertura del risultato le celle non scelgono: lo sguardo è ancora dov'era
 
 // ?mouse nell'indirizzo: il mouse fa le veci dello sguardo (per provare la tastiera senza calibrare).
@@ -55,18 +57,36 @@ const filterY = new OneEuro();
 // più grandi danno il 92% di frasi completate contro il 62%, con il 75% di cancellazioni in meno.
 const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", background: "auto", control: "eyes", drawGapMs: 2000, penStillMs: 700, penMode: "wink", penDelayMs: 800, penSens: 1, ...load(SETTINGS_KEY) };
 if (!CONTROL_MODES.includes(settings.control)) settings.control = "eyes";
-if (!(settings.penMode in PEN_MODES)) settings.penMode = "wink";
+if (!PEN_MODES.includes(settings.penMode)) settings.penMode = "wink";
+
+// Lingua: quella scelta (salvata solo se scelta davvero), altrimenti la lingua del browser. Cambiarla
+// ricarica la pagina: parole, tastiera e frasi dipendono dalla lingua. Ciò che la persona impara
+// (parole, frasi salvate) è separato per lingua; per l'italiano le chiavi sono quelle di sempre.
+const lang = detectLanguage(settings.lang);
+setLanguage(lang);
+translatePage();
+Object.assign(voiceLanguage, { xtts: locale().xtts, ui: lang }); // la voce clonata parla nella lingua scelta
+const perLanguage = (key) => (lang === "it" ? key : `${key}:${lang}`);
+for (const select of document.querySelectorAll("select.lang-select")) {
+  select.replaceChildren(...Object.values(LOCALES).map((l) => new Option(l.name, l.code)));
+  select.value = lang;
+  select.addEventListener("change", () => {
+    settings.lang = select.value;
+    save(SETTINGS_KEY, settings);
+    location.reload();
+  });
+}
 
 // Sfondo: chiaro sul telefono (lo schermo vicino al viso lo illumina, la fotocamera amplifica
 // meno e i punti del viso sono meno rumorosi), scuro sul PC. Non si sceglie misurando la luce
 // sul viso: la fotocamera regola da sola l'esposizione e l'immagine sembra sempre illuminata.
-const BACKGROUNDS = { auto: "automatico", light: "chiaro", dark: "scuro" };
+const BACKGROUNDS = ["auto", "light", "dark"];
 
 function lightBackground() {
   if (settings.background !== "auto") return settings.background === "light";
   return matchMedia("(pointer: coarse)").matches;
 }
-const DASHER_LAYOUTS = { auto: "automatica", horizontal: "orizzontale", vertical: "verticale" };
+const DASHER_LAYOUTS = ["auto", "horizontal", "vertical"];
 
 function dasherOrientation() {
   if (settings.dasherLayout !== "auto") return settings.dasherLayout;
@@ -159,7 +179,7 @@ function updateFaceStatus(f) {
   while (frameTimes.length && frameTimes[0] < f.t - 1000) frameTimes.shift();
   video.classList.toggle("face", f.face && !f.blink);
   video.classList.toggle("blink", f.face && f.blink);
-  const state = !f.face ? "no volto" : f.blink ? "occhi chiusi" : "ok";
+  const state = !f.face ? t("status.noFace") : f.blink ? t("status.eyesClosed") : t("status.ok");
   $("#face-status").textContent = `${state} · ${frameTimes.length} fps`;
   // Sul telefono la barra con la miniatura è nascosta: lo stesso stato nella barra del testo.
   const chip = $("#cam-chip");
@@ -203,7 +223,7 @@ function watchGesture(f) {
   if (gestures.update(f)) drawPad?.togglePen(f.t, gestures.backMsAt(f.t));
   if (drawPad) {
     drawPad.level = gestures.level;
-    drawPad.levelLabel = PEN_MODES[settings.penMode];
+    drawPad.levelLabel = penLabel(settings.penMode);
   }
 }
 
@@ -231,7 +251,7 @@ let resizeTimer = null;
 // Ogni orientamento ha le sue calibrazioni: la prima volta completa, poi basta la rapida.
 function calibrateForOrientation() {
   openPool();
-  toast(model ? `Schermo in ${orientation()}: ricalibrazione rapida` : `Prima volta in ${orientation()}: calibrazione completa`, 4000);
+  toast(t(model ? "calib.rotatedQuick" : "calib.rotatedFull", { o: t(innerWidth >= innerHeight ? "orientation.horizontal" : "orientation.vertical") }), 4000);
   calibrate(model ? "quick" : "full");
 }
 
@@ -244,6 +264,8 @@ $("#btn-tools").addEventListener("click", () => document.body.classList.toggle("
 
 // L'orientamento si legge dalla forma della finestra: su molti Android le dimensioni dello
 // schermo e del video della fotocamera non cambiano ruotando, quindi da sole non bastano.
+// Restituisce un identificatore (fa parte delle chiavi delle calibrazioni salvate: non si traduce);
+// il nome mostrato è orientation.horizontal / orientation.vertical.
 function orientation() {
   return innerWidth >= innerHeight ? "orizzontale" : "verticale";
 }
@@ -295,7 +317,7 @@ function setControl(next) {
   applySettings();
   if (!pool || MOUSE_MODE) return; // prima dell'avvio vale dall'avvio
   openPool();
-  toast(model ? `Controllo con ${CONTROL_LABELS[next]}: ricalibrazione rapida` : `Controllo con ${CONTROL_LABELS[next]}: calibrazione completa`, 4000);
+  toast(t(model ? "calib.controlQuick" : "calib.controlFull", { c: t(`control.${next}`) }), 4000);
   calibrate(model ? "quick" : "full");
 }
 
@@ -306,16 +328,16 @@ const RECENTER_SECONDS = 3;
 function recenter() {
   keyboard.showMain();
   board.cooldownUntil = performance.now() + (RECENTER_SECONDS + 0.5) * 1000;
-  startCountdown(RECENTER_SECONDS, (n) => toast(`Punta il centro dello schermo… ${n}`, 1300), () => {
+  startCountdown(RECENTER_SECONDS, (n) => toast(t("recenter.tick", { n }), 1300), () => {
     const last = rawPreds.slice(-15);
     if (last.length < 5) {
-      toast("Non ho visto il viso: riprova", 3000);
+      toast(t("recenter.noFace"), 3000);
       return;
     }
     const mx = last.reduce((a, q) => a + q[0], 0) / last.length;
     const my = last.reduce((a, q) => a + q[1], 0) / last.length;
     centerOffset = [0.5 - mx, 0.5 - my];
-    toast("Ricentrato", 2000);
+    toast(t("recenter.done"), 2000);
   });
   $("#center-mark").hidden = false;
 }
@@ -369,7 +391,7 @@ function show(name) {
   $("#compose").hidden = !["board", "dasher", "draw"].includes(name);
   // Nella scrittura continua e a mano la barra in alto si nasconde: più spazio per le lettere.
   $("#toolbar").hidden = ["start", "calib", "prompt", "dasher", "draw"].includes(name);
-  for (const b of [board, resultBoard, promptBoard, drawBoard]) b.reset();
+  for (const b of [board, resultBoard, promptBoard, drawBoard]) { b.reset(); b.fit(); }
   gestures.reset();
   if (name !== "draw") dot.classList.remove("pen");
   renderDot();
@@ -409,18 +431,18 @@ $("#btn-start").addEventListener("click", async () => {
   document.documentElement.requestFullscreen?.().catch(() => {});
   try {
     if (!window.isSecureContext) {
-      throw new Error("La fotocamera funziona solo in HTTPS o su localhost. Avvia serve.py (vedi README).");
+      throw new Error(t("start.insecure"));
     }
     $("#btn-start").disabled = true;
-    status.textContent = "Carico il vocabolario…";
+    status.textContent = t("start.loadingWords");
     await setupKeyboard();
     if (MOUSE_MODE) {
       startMouseMode();
       return;
     }
-    status.textContent = "Carico il modello del viso…";
+    status.textContent = t("start.loadingModel");
     await tracker.load();
-    status.textContent = "Avvio la fotocamera…";
+    status.textContent = t("start.startingCamera");
     await tracker.startCamera();
     tracker.start();
     keepScreenOn();
@@ -432,8 +454,8 @@ $("#btn-start").addEventListener("click", async () => {
     $("#btn-start").disabled = false;
     status.classList.add("error");
     status.textContent =
-      e.name === "NotAllowedError" ? "Permesso per la fotocamera negato. Consentilo dalle impostazioni del browser."
-      : e.name === "NotFoundError" ? "Nessuna fotocamera trovata."
+      e.name === "NotAllowedError" ? t("start.denied")
+      : e.name === "NotFoundError" ? t("start.noCamera")
       : e.message || String(e);
   }
 });
@@ -444,20 +466,21 @@ async function setupKeyboard() {
   if (keyboard) return;
   let words = [];
   try {
-    const res = await fetch("data/parole-it.txt");
+    const res = await fetch(locale().wordsFile);
     if (res.ok) words = (await res.text()).split(/\r?\n/).filter(Boolean);
   } catch {
     // senza vocabolario restano i suggerimenti imparati dalla persona
   }
-  const store = { load: () => load(LEXICON_KEY), save: (data) => save(LEXICON_KEY, data) };
-  keyboard = new Keyboard(board, new Predictor(words, store), {
+  const store = { load: () => load(perLanguage(LEXICON_KEY)), save: (data) => save(perLanguage(LEXICON_KEY), data) };
+  const { apostropheInWord, starters } = locale();
+  keyboard = new Keyboard(board, new Predictor(words, store, { apostropheInWord, starters }), {
     onChange: (text) => {
       $("#compose-text").textContent = display(text);
       $("#compose").scrollLeft = $("#compose").scrollWidth; // se il testo è lungo resta visibile la fine
       schedulePregeneration(text);
     },
     onSpeak: speak,
-    phrases: { load: () => load(PHRASES_KEY), save: (list) => save(PHRASES_KEY, list) },
+    phrases: { load: () => load(perLanguage(PHRASES_KEY)), save: (list) => save(perLanguage(PHRASES_KEY), list) },
     onPhraseSaved: (text) => voice.ready && voice.prefetch([text]),
   });
   keyboard.showMain();
@@ -468,104 +491,95 @@ function showMenu() {
   if (mode !== "board") show("board");
   const seconds = (settings.dwellMs / 1000).toFixed(2).replace(/0$/, "");
   const items = [
-    { label: "Ricalibra\n(10 secondi)", kind: "cmd", action: () => calibrate("quick") },
-    { label: "Calibrazione\ncompleta", kind: "cmd", action: () => calibrate("full") },
-    { label: `Fissazione\npiù lenta (ora ${seconds} s)`, kind: "cmd", action: () => { changeDwell(250); showMenu(); } },
-    { label: `Fissazione\npiù veloce (ora ${seconds} s)`, kind: "cmd", action: () => { changeDwell(-250); showMenu(); } },
-    { label: `Controllo:\n${CONTROL_LABELS[settings.control]} ▸`, kind: "cmd", action: showControlMenu },
-    settings.control !== "eyes" ? { label: "Ricentra\n(punta il centro)", kind: "cmd", action: recenter } : null,
-    { label: `Punto: ${settings.showDot ? "sì" : "no"}`, kind: "cmd", action: () => { toggleDot(); showMenu(); } },
+    { label: t("menu.recalibrate"), kind: "cmd", action: () => calibrate("quick") },
+    { label: t("menu.fullCalibration"), kind: "cmd", action: () => calibrate("full") },
+    { label: t("menu.dwellSlower", { s: seconds }), kind: "cmd", action: () => { changeDwell(250); showMenu(); } },
+    { label: t("menu.dwellFaster", { s: seconds }), kind: "cmd", action: () => { changeDwell(-250); showMenu(); } },
+    { label: t("menu.control", { c: t(`control.${settings.control}`) }), kind: "cmd", action: showControlMenu },
+    settings.control !== "eyes" ? { label: t("menu.recenter"), kind: "cmd", action: recenter } : null,
+    { label: t("menu.dot", { v: t(settings.showDot ? "yes" : "no") }), kind: "cmd", action: () => { toggleDot(); showMenu(); } },
     {
-      label: `Sfondo:\n${BACKGROUNDS[settings.background]}`,
+      label: t("menu.background", { b: t(`background.${settings.background}`) }),
       kind: "cmd",
       action: () => {
-        const order = Object.keys(BACKGROUNDS);
         const wasLight = lightBackground();
-        settings.background = order[(order.indexOf(settings.background) + 1) % order.length];
+        settings.background = BACKGROUNDS[(BACKGROUNDS.indexOf(settings.background) + 1) % BACKGROUNDS.length];
         applySettings();
         showMenu();
         // La luce sul viso è cambiata: la calibrazione fatta con l'altro sfondo vale meno.
-        if (lightBackground() !== wasLight && model) toast("Sfondo cambiato: conviene ricalibrare (Ricalibra 10 secondi)", 5000);
+        if (lightBackground() !== wasLight && model) toast(t("menu.backgroundChanged"), 5000);
       },
     },
-    { label: "Scrittura\ncontinua", kind: "cmd", action: startDasher },
-    { label: "Scrittura continua:\nimpostazioni ▸", kind: "cmd", action: showDasherMenu },
+    { label: t("menu.dasher"), kind: "cmd", action: startDasher },
+    { label: t("menu.dasherSettings"), kind: "cmd", action: showDasherMenu },
   ];
-  items[10] = { label: "Scrittura\na mano ▸", kind: "cmd", action: showDrawMenu };
-  items[11] = { label: "Indietro", kind: "cmd", action: () => keyboard.showMain() };
+  items[10] = { label: t("menu.draw"), kind: "cmd", action: showDrawMenu };
+  items[11] = { label: t("menu.back"), kind: "cmd", action: () => keyboard.showMain() };
   board.setLayout(4, 3, items);
 }
 
 // Cosa muove il puntatore. Scegliere un'altra modalità avvia la calibrazione per quella modalità.
 function showControlMenu() {
-  const choice = (key, hint) => ({
-    label: `${key === settings.control ? "✓ " : ""}${CONTROL_LABELS[key]}`,
-    hint,
+  const choice = (key) => ({
+    label: `${key === settings.control ? "✓ " : ""}${t(`control.${key}`)}`,
+    hint: t(`control.hint.${key}`),
     kind: key === settings.control ? "suggest" : "cmd",
     action: () => (key === settings.control ? showMenu() : setControl(key)),
   });
-  const items = [
-    choice("eyes", "il puntatore segue lo sguardo"),
-    choice("head", "come un puntatore sul naso"),
-    choice("both", "la testa muove, gli occhi rifiniscono"),
-  ];
-  items[11] = { label: "◂ Menu", kind: "cmd", action: showMenu };
+  const items = [choice("eyes"), choice("head"), choice("both")];
+  items[11] = { label: t("menu.backToMenu"), kind: "cmd", action: showMenu };
   board.setLayout(4, 3, items);
 }
 
 function showDasherMenu() {
   const items = [
-    { label: `Scrittura continua\npiù lenta (${settings.dasherSpeed.toFixed(1)})`, kind: "cmd", action: () => { changeDasherSpeed(-0.2); showDasherMenu(); } },
-    { label: `Scrittura continua\npiù veloce (${settings.dasherSpeed.toFixed(1)})`, kind: "cmd", action: () => { changeDasherSpeed(0.2); showDasherMenu(); } },
+    { label: t("dasher.slower", { v: settings.dasherSpeed.toFixed(1) }), kind: "cmd", action: () => { changeDasherSpeed(-0.2); showDasherMenu(); } },
+    { label: t("dasher.faster", { v: settings.dasherSpeed.toFixed(1) }), kind: "cmd", action: () => { changeDasherSpeed(0.2); showDasherMenu(); } },
     {
-      label: `Disposizione:\n${DASHER_LAYOUTS[settings.dasherLayout]}`,
+      label: t("dasher.layout", { l: t(`dasher.layout.${settings.dasherLayout}`) }),
       kind: "cmd",
       action: () => {
-        const order = Object.keys(DASHER_LAYOUTS);
-        settings.dasherLayout = order[(order.indexOf(settings.dasherLayout) + 1) % order.length];
+        settings.dasherLayout = DASHER_LAYOUTS[(DASHER_LAYOUTS.indexOf(settings.dasherLayout) + 1) % DASHER_LAYOUTS.length];
         applySettings();
         showDasherMenu();
       },
     },
-    { label: "Avvia scrittura\ncontinua", kind: "suggest", action: startDasher },
+    { label: t("dasher.start"), kind: "suggest", action: startDasher },
   ];
-  items[11] = { label: "◂ Menu", kind: "cmd", action: showMenu };
+  items[11] = { label: t("menu.backToMenu"), kind: "cmd", action: showMenu };
   board.setLayout(4, 3, items);
 }
 
 // Scrittura a mano: impostazioni e avvio.
 function showDrawMenu() {
-  const gap = (settings.drawGapMs / 1000).toFixed(1);
+  const sec = (ms) => `${(ms / 1000).toFixed(1)} s`;
   const gesture = GESTURE_MODES.includes(settings.penMode);
   const taught = Object.values(drawPersonal).reduce((n, list) => n + list.length, 0);
   const next = () => {
-    const order = Object.keys(PEN_MODES);
-    settings.penMode = order[(order.indexOf(settings.penMode) + 1) % order.length];
+    settings.penMode = PEN_MODES[(PEN_MODES.indexOf(settings.penMode) + 1) % PEN_MODES.length];
     if (drawPad) { drawPad.penMode = settings.penMode; drawPad.waiting = false; drawPad.arming = false; }
     gestures.reset();
     applySettings();
     showDrawMenu();
   };
-  const step = (label, key, delta, lo, hi, now) => ({
-    label: `${label}\n(ora ${now})`, kind: "cmd", action: () => { changeDraw(key, delta, lo, hi); showDrawMenu(); },
+  const step = (key, setting, delta, lo, hi, now) => ({
+    label: t(key, { v: now }), kind: "cmd", action: () => { changeDraw(setting, delta, lo, hi); showDrawMenu(); },
   });
-  const delay = `${(settings.penDelayMs / 1000).toFixed(1)} s`;
-  const stillTime = `${(settings.penStillMs / 1000).toFixed(1)} s`;
   const items = [
-    { label: "Avvia scrittura\na mano", kind: "suggest", action: startDraw },
-    { label: `Penna:\n${PEN_MODES[settings.penMode]}`, hint: "tocca per cambiare", kind: "cmd", action: next },
-    step("Pausa tra i disegni\npiù breve", "drawGapMs", -500, 1000, 5000, `${gap} s`),
-    step("Pausa tra i disegni\npiù lunga", "drawGapMs", 500, 1000, 5000, `${gap} s`),
+    { label: t("draw.start"), kind: "suggest", action: startDraw },
+    { label: t("draw.pen", { m: penLabel(settings.penMode) }), hint: t("draw.penHint"), kind: "cmd", action: next },
+    step("draw.gapShorter", "drawGapMs", -500, 1000, 5000, sec(settings.drawGapMs)),
+    step("draw.gapLonger", "drawGapMs", 500, 1000, 5000, sec(settings.drawGapMs)),
     // Con i gesti la penna si alza solo col gesto: l'attesa da fermo c'è solo con la cella.
-    settings.penMode === "cell" ? step("Fermo per alzare la penna:\nattesa più breve", "penStillMs", -100, 400, 1500, stillTime) : null,
-    settings.penMode === "cell" ? step("Fermo per alzare la penna:\nattesa più lunga", "penStillMs", 100, 400, 1500, stillTime) : null,
-    step("Preparazione penna\npiù breve", "penDelayMs", -100, 200, 2000, delay),
-    step("Preparazione penna\npiù lunga", "penDelayMs", 100, 200, 2000, delay),
-    gesture ? step("Gesto più facile\n(soglia più bassa)", "penSens", 0.1, 0.5, 2, settings.penSens.toFixed(1)) : null,
-    gesture ? step("Gesto più difficile\n(soglia più alta)", "penSens", -0.1, 0.5, 2, settings.penSens.toFixed(1)) : null,
-    taught ? { label: `Dimentica le lettere\nimparate (${taught})`, kind: "cmd remove", action: () => { for (const k of Object.keys(drawPersonal)) delete drawPersonal[k]; save(DRAW_KEY, drawPersonal); showDrawMenu(); } } : null,
+    settings.penMode === "cell" ? step("draw.stillShorter", "penStillMs", -100, 400, 1500, sec(settings.penStillMs)) : null,
+    settings.penMode === "cell" ? step("draw.stillLonger", "penStillMs", 100, 400, 1500, sec(settings.penStillMs)) : null,
+    step("draw.delayShorter", "penDelayMs", -100, 200, 2000, sec(settings.penDelayMs)),
+    step("draw.delayLonger", "penDelayMs", 100, 200, 2000, sec(settings.penDelayMs)),
+    gesture ? step("draw.sensEasier", "penSens", 0.1, 0.5, 2, settings.penSens.toFixed(1)) : null,
+    gesture ? step("draw.sensHarder", "penSens", -0.1, 0.5, 2, settings.penSens.toFixed(1)) : null,
+    taught ? { label: t("draw.forget", { n: taught }), kind: "cmd remove", action: () => { for (const k of Object.keys(drawPersonal)) delete drawPersonal[k]; save(DRAW_KEY, drawPersonal); showDrawMenu(); } } : null,
   ];
-  items[11] = { label: "◂ Menu", kind: "cmd", action: showMenu };
+  items[11] = { label: t("menu.backToMenu"), kind: "cmd", action: showMenu };
   board.setLayout(4, 3, items);
 }
 
@@ -575,10 +589,16 @@ function changeDraw(key, delta, lo, hi) {
   applySettings();
 }
 
+// Probabilità delle lettere per la scrittura continua e a mano: accenti e apostrofo della lingua in uso.
+function letterModel() {
+  const { accents, apostropheInWord } = locale();
+  return new LetterModel(keyboard.predictor.words, keyboard.predictor.user.uni, { accents, apostropheInWord }); // include le parole imparate
+}
+
 // Scrittura a mano: il puntatore disegna una lettera o una parola; il testo è quello della tastiera.
 function startDraw() {
   show("draw");
-  drawModel = new LetterModel(keyboard.predictor.words, keyboard.predictor.user.uni); // include le parole imparate
+  drawModel = letterModel();
   drawLexicon = new Lexicon(keyboard.predictor.words, keyboard.predictor.user.uni);
   drawLast = null;
   drawPad ??= new DrawPad($("#draw-canvas"), {
@@ -604,7 +624,7 @@ function startDraw() {
 function onDrawing(strokes) {
   const letters = groupLetters(strokes, Math.min(drawPad.rect.width, drawPad.rect.height) * 0.05);
   if (!letters.length) {
-    toast("Segno troppo piccolo: disegna più grande", 2500);
+    toast(t("draw.tooSmall"), 2500);
     return;
   }
   const text = keyboard.text;
@@ -629,7 +649,7 @@ function onDrawing(strokes) {
 // personale: ogni lettera disegnata per la lettera giusta della parola scelta.
 function pickDrawAlternative(choice) {
   if (!drawLast) return;
-  const key = choice.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+  const key = normalize(choice).toUpperCase(); // senza accenti; ß = ss, œ = oe
   if (/^[A-Z]+$/.test(key) && key.length === drawLast.letters.length) {
     drawLast.letters.forEach((strokes, i) => addPersonal(drawPersonal, key[i], strokes));
     save(DRAW_KEY, drawPersonal);
@@ -643,25 +663,25 @@ function pickDrawAlternative(choice) {
 function showDrawCells() {
   const after = (fn) => (...args) => { drawLast = null; fn(...args); showDrawCells(); };
   const suggestion = (w) => w && { label: w, kind: "suggest", action: after(() => keyboard.applySuggestion(w)) };
-  const alternative = (c) => c && { label: drawLast.kind === "letter" ? c.toUpperCase() : c, kind: drawLast.kind === "letter" ? "letter" : "suggest", hint: "forse", action: () => pickDrawAlternative(c) };
+  const alternative = (c) => c && { label: drawLast.kind === "letter" ? c.toUpperCase() : c, kind: drawLast.kind === "letter" ? "letter" : "suggest", hint: t("draw.maybe"), action: () => pickDrawAlternative(c) };
   const [s1, s2] = keyboard.predictor.suggest(keyboard.text, 2);
   const [a1, a2] = drawLast?.alternatives ?? [];
   const waiting = drawPad?.waiting;
   // Modo "cella accanto": fissandola la penna è pronta e la preparazione parte al rientro nel disegno.
   const penCell = settings.penMode === "cell" && {
-    label: waiting ? "✎ Penna pronta\ntorna nel disegno" : "✎ Penna",
-    hint: waiting ? undefined : "poi torna nel disegno",
+    label: waiting ? t("draw.penCellReady") : t("draw.penCell"),
+    hint: waiting ? undefined : t("draw.penCellHint"),
     kind: waiting ? "suggest" : "cmd",
     action: () => drawPad.requestPen(),
   };
   const items = [
     suggestion(s1), suggestion(s2), alternative(a1), alternative(a2),
     ...(penCell ? [penCell] : []),
-    { label: "Spazio", kind: "cmd", action: after(() => keyboard.space()) },
-    { label: "Cancella", hint: "continua a guardare: parole intere", kind: "cmd", hold: { key: "cancella", repeatMs: 1500 },
+    { label: t("kb.space"), kind: "cmd", action: after(() => keyboard.space()) },
+    { label: t("kb.delete"), hint: t("kb.deleteHint"), kind: "cmd", hold: { key: "cancella", repeatMs: 1500 },
       action: after((count = 1) => (count <= 1 ? keyboard.backspace() : keyboard.deleteWord())) },
-    { label: "Parla", kind: "cmd speak", action: after(() => keyboard.speakText()) },
-    { label: "Tastiera", kind: "cmd", action: () => { keyboard.showMain(); show("board"); } },
+    { label: t("kb.speak"), kind: "cmd speak", action: after(() => keyboard.speakText()) },
+    { label: t("kb.keyboard"), kind: "cmd", action: () => { keyboard.showMain(); show("board"); } },
   ];
   // Schermo largo: celle in colonna a destra; in verticale: in fila sotto il disegno. Con la cella
   // "Penna" sono nove: 2x5 (una vuota) o 3x3; altrimenti otto: 2x4 o 4x2.
@@ -682,7 +702,7 @@ function startDasher() {
     getGaze: () => gaze,
     isPaused: () => eyesClosed,
   });
-  dasher.model = new LetterModel(predictor.words, predictor.user.uni); // include le parole imparate
+  dasher.model = letterModel();
   dasher.speed = settings.dasherSpeed;
   dasher.orientation = dasherOrientation();
   dasher.light = lightBackground();
@@ -764,19 +784,12 @@ async function calibrate(kind = "full") {
   calibrator.aborted = false;
   show("calib");
   try {
-    const intro = {
-      eyes: ["Ricalibrazione rapida: segui il punto con gli occhi.",
-        "Segui il punto rosso solo con gli occhi, tenendo la testa ferma. Quando diventa azzurro, fissalo."],
-      head: ["Ricalibrazione rapida: segui il punto muovendo la testa, come un puntatore sul naso.",
-        "Segui il punto rosso muovendo la testa, come se avessi un puntatore sul naso. Raggiungi anche gli angoli dello schermo. Quando diventa azzurro, resta fermo."],
-      both: ["Ricalibrazione rapida: segui il punto con gli occhi e con la testa insieme.",
-        "Segui il punto rosso con gli occhi e muovendo un po' la testa nella sua direzione, come farai usando Sguardo. Quando diventa azzurro, fissalo."],
-    }[settings.control];
+    const intro = [t(`calib.intro.${settings.control}.quick`), t(`calib.intro.${settings.control}.full`)];
     await calibrator.intro(quick ? intro[0] : intro[1], settings.control === "eyes" ? (quick ? 2000 : 3000) : (quick ? 3000 : 5000));
     const calib = await calibrator.runPoints(quick ? QUICK_POINTS : CALIB_POINTS, sampler);
     const points = calib.fixations.map(({ point, samples }) => ({ point, samples: usable(samples) }));
     if (points.reduce((s, p) => s + p.samples.length, 0) < calib.fixations.length * 8) {
-      throw new Error("Non ho visto il viso abbastanza a lungo. Controlla la luce e che il volto sia inquadrato.");
+      throw new Error(t("calib.noFace"));
     }
     const pose = meanPose(calib.fixations.flatMap(({ samples }) => samples.map((s) => s.pose)));
 
@@ -813,7 +826,7 @@ async function calibrate(kind = "full") {
     keyboard.showMain();
     if (quick) {
       show("board");
-      toast("Ricalibrato");
+      toast(t("calib.done"));
     } else {
       showResult(stats);
     }
@@ -832,7 +845,7 @@ async function calibrate(kind = "full") {
       lastRecalAt = performance.now();
       keyboard.showMain();
       show("board");
-      toast(`Ricalibrazione non riuscita. ${e.message || ""}`, 5000);
+      toast(t("calib.failedQuick", { m: e.message || "" }), 5000);
       return;
     }
     showResult({ error: e.message || String(e) });
@@ -843,7 +856,7 @@ function promptRecalibration() {
   show("prompt");
   promptBoard.setLayout(3, 1, [
     null,
-    { label: "Non ora", kind: "cmd", action: () => { snoozeUntil = performance.now() + SNOOZE_MS; show("board"); } },
+    { label: t("prompt.notNow"), kind: "cmd", action: () => { snoozeUntil = performance.now() + SNOOZE_MS; show("board"); } },
     null,
   ]);
   startCountdown(PROMPT_SECONDS, (n) => ($("#prompt-count").textContent = n), () => calibrate("quick"));
@@ -858,7 +871,7 @@ function measureError(m, validation) {
       errs.push(Math.hypot((x - point[0]) * innerWidth, (y - point[1]) * innerHeight));
     }
   }
-  if (!errs.length) return { error: "Nessun dato durante la verifica: il viso non era visibile." };
+  if (!errs.length) return { error: t("calib.noData") };
   return { meanPx: errs.reduce((s, e) => s + e, 0) / errs.length, diag, sessions: pool.size };
 }
 
@@ -866,24 +879,21 @@ function measureError(m, validation) {
 function showResult(r, again = false) {
   if (!r.error) lastResult = r;
   const body = $("#result-body");
-  const goOn = { label: "Continua", kind: "suggest", action: () => show("board") };
+  const goOn = { label: t("result.continue"), kind: "suggest", action: () => show("board") };
   if (r.error) {
-    $("#result-title").textContent = "Calibrazione non riuscita";
+    $("#result-title").textContent = t("result.failedTitle");
     body.textContent = r.error;
-    resultBoard.setLayout(2, 1, [{ label: "Riprova", kind: "cmd", action: () => calibrate("full") }, model ? goOn : null]);
+    resultBoard.setLayout(2, 1, [{ label: t("result.retry"), kind: "cmd", action: () => calibrate("full") }, model ? goOn : null]);
   } else {
     const pct = ((r.meanPx / r.diag) * 100).toFixed(1);
-    $("#result-title").textContent = "Calibrazione completata";
-    body.innerHTML = `
-      <div>Errore medio <span class="big-number">${Math.round(r.meanPx)} px</span> (${pct}% della diagonale)</div>
-      <p>Calibrazioni salvate: ${r.sessions}. Più sono, più la stima regge ai cambi di postura.</p>
-      <p>Fissa una delle due celle, oppure continuo da solo tra <b id="result-count"></b> secondi.</p>`;
+    $("#result-title").textContent = t("result.doneTitle");
+    body.innerHTML = t("result.body", { px: Math.round(r.meanPx), pct, n: r.sessions });
     // "Continua" per prima: a fine calibrazione lo sguardo resta dove era e finire per sbaglio su
     // "Ricalibra" faceva ripartire la calibrazione in continuazione.
-    resultBoard.setLayout(2, 1, [goOn, { label: "Ricalibra", kind: "cmd", action: () => calibrate("full") }]);
+    resultBoard.setLayout(2, 1, [goOn, { label: t("result.recalibrate"), kind: "cmd", action: () => calibrate("full") }]);
   }
   $("#btn-diag").hidden = $("#btn-download").hidden = !(lastSession && !r.error);
-  $("#btn-download").textContent = "Salva dati";
+  $("#btn-download").textContent = t("result.save");
   $("#btn-download").disabled = false;
   show("result");
   resultBoard.cooldownUntil = performance.now() + RESULT_GRACE_MS;
@@ -943,7 +953,7 @@ function showDiagnostics() {
   ctx.fillStyle = "#f2f4f8";
   ctx.font = "16px system-ui, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("Croce = dove guardavi · grigio = calibrazione · azzurro = verifica · linea gialla = errore medio. Tocca per chiudere.", innerWidth / 2, innerHeight / 2);
+  ctx.fillText(t("result.diagnostics"), innerWidth / 2, innerHeight / 2);
 }
 
 // Prima prova a salvare tramite serve.py (cartella recordings/), altrimenti scarica il file.
@@ -956,7 +966,7 @@ async function saveSession() {
     const res = await fetch("/api/recording", { method: "POST", headers: { ...API_HEADERS, "Content-Type": "application/json" }, body: json });
     if (!res.ok) throw new Error(res.status);
     const { file } = await res.json();
-    button.textContent = `Salvato in ${file}`;
+    button.textContent = t("result.saved", { file });
     button.disabled = true;
     return;
   } catch {
@@ -969,7 +979,7 @@ async function saveSession() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-  button.textContent = "Scaricato";
+  button.textContent = t("result.downloaded");
 }
 
 // ---------- voce ----------
@@ -1018,8 +1028,8 @@ function speakWithBrowser(text) {
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = "it-IT";
-    const v = speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith("it"));
+    u.lang = locale().speech;
+    const v = speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith(locale().code));
     if (v) u.voice = v;
     speechSynthesis.speak(u);
   } catch {
@@ -1029,7 +1039,7 @@ function speakWithBrowser(text) {
 
 // Frasi da tenere sempre pronte con la voce clonata: predefinite e salvate dalla persona.
 function phrasesToKeep() {
-  return [...DEFAULT_PHRASES.map((p) => p.say), ...(load(PHRASES_KEY) ?? [])];
+  return [...defaultPhrases().map((p) => p.say), ...(load(perLanguage(PHRASES_KEY)) ?? [])];
 }
 
 // Schermata iniziale: chi assiste carica i vocali e clona la voce, una volta sola.
@@ -1046,25 +1056,21 @@ function renderVoice(message) {
   const el = $("#voice-status");
   el.classList.remove("error");
   if (!s.installed) {
-    el.textContent = "Voce clonata non installata: Sguardo userà la voce del browser (vedi README, requirements-voce.txt).";
+    el.textContent = t("voice.notInstalled");
     $("#voice-controls").hidden = $("#voice-try").hidden = true;
     return;
   }
   if (!s.local) {
     // Dal telefono (serve.py --https): la voce si usa, ma si prepara solo dal PC.
-    el.textContent = s.cloned && s.license
-      ? "Voce clonata pronta (si prepara e si modifica dal PC su cui gira Sguardo)."
-      : "Nessuna voce clonata: si prepara dal PC su cui gira Sguardo. Intanto si usa la voce del dispositivo.";
+    el.textContent = s.cloned && s.license ? t("voice.remoteReady") : t("voice.remoteNone");
     $("#voice-controls").hidden = $("#voice-try").hidden = $("#voice-license").hidden = true;
     return;
   }
   $("#voice-license").hidden = s.license;
-  const saved = s.samples.length
-    ? ` Campioni già salvati: ${s.samples.length} (si sommano ai nuovi; "Elimina voce" per ricominciare).`
-    : "";
+  const saved = s.samples.length ? t("voice.savedSamples", { n: s.samples.length }) : "";
   el.textContent = message ?? (s.cloned && s.license
-    ? `Voce clonata pronta${s.state === "caricamento" ? " (il modello si sta caricando)" : ""}.${saved}`
-    : `Carica o registra 10–30 secondi di voce della persona (vanno bene i vocali di WhatsApp) e premi Clona.${saved}`);
+    ? t("voice.ready", { loading: s.state === "caricamento" ? t("voice.readyLoading") : "", saved })
+    : t("voice.prompt", { saved }));
   $("#voice-try").hidden = !(s.cloned && s.license);
 }
 
@@ -1073,10 +1079,10 @@ $("#voice-files").addEventListener("change", updateChosenLabel);
 function updateChosenLabel() {
   const parts = [];
   const n = $("#voice-files").files.length;
-  if (n) parts.push(`${n} file scelti`);
+  if (n) parts.push(t("voice.filesChosen", { n }));
   if (recordings.length) {
     const seconds = Math.round(recordings.reduce((s, r) => s + r.seconds, 0));
-    parts.push(`${recordings.length} registrazion${recordings.length === 1 ? "e" : "i"} (${seconds} s)`);
+    parts.push(t("voice.recordings", { n: recordings.length, s: seconds }));
   }
   $("#voice-files-label").textContent = parts.join(" + ");
 }
@@ -1092,7 +1098,7 @@ $("#btn-record").addEventListener("click", async () => {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true } });
   } catch (e) {
-    renderVoice(e.name === "NotAllowedError" ? "Permesso per il microfono negato." : `Microfono non disponibile: ${e.message}`);
+    renderVoice(e.name === "NotAllowedError" ? t("voice.micDenied") : t("voice.micUnavailable", { m: e.message }));
     $("#voice-status").classList.add("error");
     return;
   }
@@ -1107,7 +1113,7 @@ $("#btn-record").addEventListener("click", async () => {
     const type = recorder.mimeType || "audio/webm";
     const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
     const blob = new Blob(chunks, { type });
-    recordings.push({ file: new File([blob], `registrazione-${recordings.length + 1}.${ext}`, { type }), seconds });
+    recordings.push({ file: new File([blob], `${t("voice.recordingName")}-${recordings.length + 1}.${ext}`, { type }), seconds });
     const preview = $("#record-preview");
     preview.src = URL.createObjectURL(blob);
     preview.hidden = false;
@@ -1115,7 +1121,7 @@ $("#btn-record").addEventListener("click", async () => {
     $("#btn-record").disabled = false;
     recorder = null;
     updateChosenLabel();
-    renderVoice(`Registrati ${Math.round(seconds)} secondi: ascoltali qui sotto, poi premi Clona la voce (o registra ancora).`);
+    renderVoice(t("voice.recorded", { s: Math.round(seconds) }));
   };
   recorder.start();
   $("#btn-record").disabled = true;
@@ -1134,12 +1140,12 @@ $("#btn-clone").addEventListener("click", async () => {
   const files = [...$("#voice-files").files, ...recordings.map((r) => r.file)];
   const button = $("#btn-clone");
   if (!files.length && !voice.status.samples.length) {
-    renderVoice("Scegli prima almeno un vocale.");
+    renderVoice(t("voice.chooseFirst"));
     return;
   }
   if (!voice.status.license) {
     if (!$("#voice-license-check").checked) {
-      renderVoice("Per clonare la voce bisogna prima accettare la licenza del modello.");
+      renderVoice(t("voice.acceptFirst"));
       $("#voice-status").classList.add("error");
       return;
     }
@@ -1148,19 +1154,19 @@ $("#btn-clone").addEventListener("click", async () => {
   button.disabled = true;
   try {
     for (const [i, f] of files.entries()) {
-      renderVoice(`Carico ${f.name} (${i + 1}/${files.length})…`);
+      renderVoice(t("voice.uploading", { name: f.name, i: i + 1, n: files.length }));
       await voice.upload(f);
     }
-    renderVoice("Clonazione in corso… Al primo uso scarica il modello (circa 1,8 GB): può volerci parecchio.");
+    renderVoice(t("voice.cloning"));
     const { seconds } = await voice.clone();
     $("#voice-files").value = "";
     recordings.length = 0;
     $("#record-preview").hidden = true;
     updateChosenLabel();
-    renderVoice(`Voce clonata da ${seconds} secondi di parlato. Prova ad ascoltarla.`);
+    renderVoice(t("voice.cloned", { s: seconds }));
     voice.prefetch(phrasesToKeep());
   } catch (e) {
-    renderVoice(`Clonazione non riuscita: ${e.message}`);
+    renderVoice(t("voice.cloneFailed", { m: e.message }));
     $("#voice-status").classList.add("error");
   } finally {
     button.disabled = false;
@@ -1172,13 +1178,13 @@ $("#btn-voice-test").addEventListener("click", async () => {
   if (!text) return;
   const button = $("#btn-voice-test");
   button.disabled = true;
-  renderVoice("Genero la frase…");
+  renderVoice(t("voice.generating"));
   try {
     const started = performance.now();
     await voice.play(text);
-    renderVoice(`Frase generata in ${((performance.now() - started) / 1000).toFixed(1)} s.`);
+    renderVoice(t("voice.generated", { s: ((performance.now() - started) / 1000).toFixed(1) }));
   } catch (e) {
-    renderVoice(`Errore: ${e.message}`);
+    renderVoice(t("voice.error", { m: e.message }));
     $("#voice-status").classList.add("error");
   } finally {
     button.disabled = false;
@@ -1186,7 +1192,7 @@ $("#btn-voice-test").addEventListener("click", async () => {
 });
 
 $("#btn-voice-reset").addEventListener("click", async () => {
-  if (!confirm("Eliminare la voce clonata e i vocali caricati?")) return;
+  if (!confirm(t("voice.confirmReset"))) return;
   await voice.reset();
   renderVoice();
 });
@@ -1198,7 +1204,7 @@ setupVoice();
 function applySettings() {
   board.dwellMs = resultBoard.dwellMs = promptBoard.dwellMs = settings.dwellMs;
   $("#dwell-value").textContent = `${(settings.dwellMs / 1000).toFixed(2).replace(/0$/, "")} s`;
-  $("#btn-dot").textContent = `Punto: ${settings.showDot ? "sì" : "no"}`;
+  $("#btn-dot").textContent = t("bar.dot", { v: t(settings.showDot ? "yes" : "no") });
   tracker.mode = settings.control;
   for (const select of document.querySelectorAll("select.control-select")) select.value = settings.control;
   document.body.classList.toggle("light", lightBackground());
@@ -1228,10 +1234,10 @@ for (const select of document.querySelectorAll("select.control-select")) {
 if (MOUSE_MODE) for (const el of document.querySelectorAll(".control-pick, #control-toolbar")) el.hidden = true;
 $("#btn-last-result").addEventListener("click", () => {
   if (lastResult) showResult(lastResult, true);
-  else toast("Nessuna calibrazione completa da quando hai aperto la pagina: premi Ricalibra.", 4000);
+  else toast(t("result.none"), 4000);
 });
 $("#btn-reset").addEventListener("click", () => {
-  if (!pool || !confirm("Cancellare tutte le calibrazioni salvate? Serve quando cambia la persona che usa Sguardo.")) return;
+  if (!pool || !confirm(t("reset.confirm"))) return;
   // Tutti gli archivi: uno per orientamento, più quello del formato precedente.
   try {
     for (const k of Object.keys(localStorage)) if (k === POOL_KEY || k.startsWith(`${POOL_KEY}:`)) localStorage.removeItem(k);

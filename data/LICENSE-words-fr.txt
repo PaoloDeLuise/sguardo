@@ -1,0 +1,22 @@
+data/words-fr.txt
+
+Le 30.000 parole francesi più frequenti, in ordine di frequenza, ricavate da
+FrequencyWords di Hermit Dave (https://github.com/hermitdave/FrequencyWords,
+file content/2018/fr/fr_50k.txt), a sua volta basato sui sottotitoli di OpenSubtitles.
+
+Modifiche: tenute solo le parole in lettere minuscole francesi (a-z, à â ä æ ç é è ê ë
+î ï ô œ ù û ü ÿ); l'apostrofo tipografico è stato normalizzato in '. Tolti i conteggi,
+i token con cifre, trattini o apostrofo interno (es. aujourd'hui, va-t', est-ce-qu'),
+i frammenti inglesi o senza senso, le lettere singole (tranne "a", "à" e "y"), le
+sequenze senza vocale, le onomatopee (hmm, pfff, bah, euh ecc.; tenute ah, oh, eh),
+le sigle e i nomi dei sottotitoli (www, sync, soustitres ecc.) e gli insulti razzisti.
+Le elisioni sono tenute come parole che finiscono con l'apostrofo (l', d', j', qu',
+n', s', c', m', t', jusqu', lorsqu', puisqu', quelqu', quoiqu', aujourd'): nella fonte erano
+già presenti come token con apostrofo finale, quindi non è stato necessario
+ricomporle. Se la stessa parola compariva più volte è stata tenuta solo la prima.
+
+Licenza: i dati di FrequencyWords sono distribuiti con licenza
+Creative Commons Attribuzione - Condividi allo stesso modo 4.0 Internazionale (CC BY-SA 4.0),
+https://creativecommons.org/licenses/by-sa/4.0/
+Questo file, essendo un adattamento, è distribuito con la stessa licenza.
+(Il codice di FrequencyWords è invece MIT; qui non ne viene usato.)

@@ -39,8 +39,9 @@ export class DwellBoard {
       [cols, rows, items] = [rows, cols, t];
     }
     this.reset();
-    this.container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-    this.container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+    // minmax(0, 1fr): le celle non crescono oltre lo spazio, nemmeno con un testo lungo (tedesco).
+    this.container.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+    this.container.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
     this.container.replaceChildren();
     this.cells = [];
     for (let i = 0; i < cols * rows; i++) {
@@ -61,6 +62,28 @@ export class DwellBoard {
         this.cells.push(el);
       }
       this.container.appendChild(el);
+    }
+    this.fit();
+  }
+
+  // Testi lunghi (parole lunghe di alcune lingue, celle strette del telefono): il carattere si
+  // rimpicciolisce finché il testo entra nella cella. Non si fa se la griglia è nascosta (non si
+  // misura niente): si rifà quando compare (main.js show) o dopo una rotazione (relayout).
+  fit() {
+    for (const cell of this.cells) {
+      cell.style.fontSize = "";
+      if (cell.classList.contains("letter") || !cell.clientWidth) continue;
+      const label = cell.querySelector(".label");
+      const hint = cell.querySelector(".hint");
+      let size = parseFloat(getComputedStyle(cell).fontSize);
+      const overflows = () => label.offsetWidth > cell.clientWidth - 16 || label.offsetHeight > cell.clientHeight - 16 - (hint ? hint.offsetHeight : 0);
+      label.style.overflowWrap = "";
+      while (size > 11 && overflows()) {
+        size *= 0.92;
+        cell.style.fontSize = `${size}px`;
+      }
+      // Anche al minimo non entra (una parola lunghissima): solo adesso si spezza la parola.
+      if (overflows()) label.style.overflowWrap = "anywhere";
     }
   }
 

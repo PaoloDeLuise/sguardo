@@ -223,18 +223,22 @@ export function groupLetters(strokes, minSize = 0) {
   const groups = [];
   for (const s of strokes.filter((st) => st.length > 1)) {
     const b = box([s]);
-    let best = null, bestOverlap = 0;
+    const touching = [];
     for (const g of groups) {
       // Riquadri allargati: un tratto verticale è largo zero e, anche se attraversa la barra di una
       // T, senza margine non si sovrapporrebbe a niente.
       const height = Math.max(b.y1 - b.y0, g.box.y1 - g.box.y0), pad = 0.03 * height;
       const overlap = Math.min(b.x1, g.box.x1) - Math.max(b.x0, g.box.x0) + 2 * pad;
       const narrow = Math.min(b.x1 - b.x0, g.box.x1 - g.box.x0) + 2 * pad;
-      if (overlap > 0.3 * narrow && overlap > bestOverlap) { best = g; bestOverlap = overlap; }
+      if (overlap > 0.3 * narrow) touching.push(g);
     }
-    if (best) {
-      best.strokes.push(s);
-      best.box = box(best.strokes);
+    if (touching.length) {
+      // Un tratto che attraversa più gruppi li unisce: la traversa della H, disegnata dopo le due
+      // aste, le tiene insieme (le due aste da sole sarebbero due lettere).
+      const [first, ...others] = touching;
+      first.strokes.push(s, ...others.flatMap((g) => g.strokes));
+      first.box = box(first.strokes);
+      for (const g of others) groups.splice(groups.indexOf(g), 1);
     } else {
       groups.push({ strokes: [s], box: b });
     }

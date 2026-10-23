@@ -65,6 +65,13 @@ assert.equal(groupLetters([stem, [[1.0, 0], [1.0, 1]]]).length, 2, "due I affian
 assert.equal(groupLetters([[[0, 0], [0.01, 0.01]], stem], 0.2).length, 1, "un segnetto è rumore");
 const E = [[[0.65, 0], [0, 0], [0, 1], [0.65, 1]], [[0, 0.5], [0.5, 0.5]]];
 assert.equal(groupLetters([...E, ...L(E, 1)].reverse()).length, 2, "l'ordine dei tratti non conta");
+// H disegnata prima con le due aste e poi con la traversa: la traversa tiene insieme le aste (una lettera).
+const H = [[[0, 0], [0.02, 1]], [[0.6, 0], [0.62, 1]], [[0.02, 0.5], [0.6, 0.52]]];
+assert.equal(groupLetters(H).length, 1, "le due aste e la traversa della H sono una lettera");
+assert.equal(groupLetters([...H, ...L(H, 0.95)]).length, 2, "due H vicine sono due lettere");
+assert.equal(groupLetters([...L(H, 0.95), ...H]).length, 2, "...in qualunque ordine");
+const A = [[[0, 1], [0.35, 0], [0.7, 1]], [[0.12, 0.65], [0.58, 0.65]]];
+assert.equal(groupLetters([...A, ...L(A, 0.95)]).length, 2, "due A vicine sono due lettere");
 
 assert.ok(last.top1 > last.literal, "il dizionario deve aiutare quando il disegno è disturbato");
 assert.ok(names >= NAMES.length - 1, "i nomi fuori dizionario devono restare leggibili");

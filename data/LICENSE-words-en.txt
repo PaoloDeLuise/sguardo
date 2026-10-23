@@ -1,0 +1,19 @@
+data/words-en.txt
+Le 30.000 parole inglesi più frequenti, in ordine di frequenza, ricavate da
+FrequencyWords di Hermit Dave (https://github.com/hermitdave/FrequencyWords,
+file content/2018/en/en_50k.txt), a sua volta basato sui sottotitoli di OpenSubtitles.
+
+Modifiche: tenute solo le parole in lettere a-z (minuscole), con l'apostrofo
+interno per le contrazioni (don't, i'm, it's); tolti i conteggi, i frammenti
+con apostrofo iniziale o finale, i token con cifre, le lettere singole (tranne
+"a" e "i"), le sequenze senza vocale, le onomatopee (uh, hmm, ugh ecc.; tenute
+oh, ah, um), le sigle e i nomi dei sottotitoli (www, sync, subtitles ecc.) e gli
+insulti razzisti. Nella fonte le contrazioni sono spezzate (don + 't): sono state
+ricomposte, con una frequenza stimata a partire dai frammenti, e inserite
+nell'ordine. Se la stessa parola compariva più volte è stata tenuta solo la prima.
+
+Licenza: i dati di FrequencyWords sono distribuiti con licenza
+Creative Commons Attribuzione - Condividi allo stesso modo 4.0 Internazionale (CC BY-SA 4.0),
+https://creativecommons.org/licenses/by-sa/4.0/
+Questo file, essendo un adattamento, è distribuito con la stessa licenza.
+(Il codice di FrequencyWords è invece MIT; qui non ne viene usato.)

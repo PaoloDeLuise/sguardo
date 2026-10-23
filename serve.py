@@ -23,7 +23,7 @@ import ssl
 import sys
 import urllib.parse
 
-from voice import VoiceEngine
+from voice import VoiceEngine, error_message
 
 ROOT = pathlib.Path(__file__).resolve().parent
 CERT_DIR = ROOT / ".cert"
@@ -132,7 +132,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 text = request.get("text", "").strip()[:MAX_TTS_CHARS]
                 if not text:
                     raise ValueError("Testo vuoto.")
-                audio = voice.synthesize(text, keep=bool(request.get("keep")))
+                audio = voice.synthesize(text, keep=bool(request.get("keep")), language=str(request.get("lang", "")))
                 self.send_response(200)
                 self.send_header("Content-Type", "audio/wav")
                 self.send_header("Content-Length", str(len(audio)))
@@ -141,7 +141,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             else:
                 self.send_error(404)
         except ValueError as e:
-            self.send_json({"error": str(e)}, 400)
+            # La lingua dell'interfaccia arriva in X-Sguardo-Lang: gli errori della voce si traducono.
+            self.send_json({"error": error_message(e, self.headers.get("X-Sguardo-Lang", "it"))}, 400)
         except Exception as e:  # noqa: BLE001 - l'errore viene mostrato nella pagina
             self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
 

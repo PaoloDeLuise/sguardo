@@ -22,6 +22,8 @@
 // dopo); passato `gapMs` dall'ultimo tratto il disegno è finito e si riconosce.
 // Con il mouse (?mouse nell'indirizzo) o il dito: tenere premuto abbassa la penna.
 
+import { t } from "./i18n.js";
+
 const MIN_POINT_GAP_PX = 2;  // punti più vicini di così non aggiungono nulla
 const FLASH_MS = 1000;
 const PAUSE_MS = 150;        // una pausa a fine tratto: fermi (entro stillPx) per almeno così
@@ -337,7 +339,7 @@ export class DrawPad {
       ctx.font = "13px system-ui, sans-serif";
       ctx.textBaseline = "bottom";
       ctx.fillStyle = p.text;
-      ctx.fillText(`${this.levelLabel}: oltre il segno scatta`, x, y - 8);
+      ctx.fillText(t("pad.level", { label: this.levelLabel }), x, y - 8);
       ctx.textBaseline = "top";
     }
 
@@ -346,14 +348,13 @@ export class DrawPad {
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillStyle = this.pen ? p.ink : p.penUp;
-    const GESTURES = { wink: "fai un occhiolino", mouth: "apri la bocca" };
-    const how = this.pointerPens ? "tieni premuto" : this.penMode === "cell" ? "scegli «Penna» e rientra qui" : GESTURES[this.penMode];
-    const up = this.pointerPens ? "rilascia" : this.penMode === "cell" ? "fermo un attimo, o esci dall'area"
-      : `${GESTURES[this.penMode]} di nuovo`;
-    const cancel = this.penMode === "cell" ? "esci dall'area per annullare" : "ripeti il gesto per annullare";
-    ctx.fillText(this.waiting ? "✎ penna pronta: torna nell'area di disegno, la preparazione parte quando rientri"
-      : this.arming ? `✎ posizionati: la penna sta per scendere (${cancel})`
-      : this.pen ? `✎ penna abbassata: disegna (${up} per alzarla)` : `✎ penna alzata: ${how} per scrivere`, 16, 14);
+    const gesture = this.penMode === "mouth" ? "Mouth" : "Wink";
+    const how = this.pointerPens ? t("pad.howPointer") : this.penMode === "cell" ? t("pad.howCell") : t(`pad.how${gesture}`);
+    const up = this.pointerPens ? t("pad.upPointer") : this.penMode === "cell" ? t("pad.upCell") : t(`pad.up${gesture}`);
+    const cancel = this.penMode === "cell" ? t("pad.cancelCell") : t("pad.cancelGesture");
+    ctx.fillText(this.waiting ? t("pad.waiting")
+      : this.arming ? t("pad.arming", { cancel })
+      : this.pen ? t("pad.down", { up }) : t("pad.idle", { how }), 16, 14);
     if (!this.pen && !this.arming && !this.waiting && this.strokes.length) {
       const left = Math.max(0, 1 - (now - this.penUpAt) / this.gapMs);
       ctx.fillStyle = p.frame;
@@ -362,7 +363,7 @@ export class DrawPad {
       ctx.fillRect(16, 46, (W - 32) * left, 6);
     } else if (!this.strokes.length && !this.pen && !this.arming && !this.waiting) {
       ctx.fillStyle = p.text;
-      ctx.fillText("Una lettera, oppure una parola: lettere in fila da sinistra a destra.", 16, 46);
+      ctx.fillText(t("pad.hint"), 16, 46);
     }
   }
 }

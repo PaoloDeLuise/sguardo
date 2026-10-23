@@ -41,7 +41,9 @@ MAX_RECENT_FILES = 100
 MAX_RECENT_BYTES = 15 * 1024 * 1024
 
 MODEL_NAME = "tts_models/multilingual/multi-dataset/xtts_v2"
-LANGUAGE = "it"
+LANGUAGE = "it"  # lingua di partenza; la pagina manda la sua in ogni richiesta
+# Lingue di XTTS-v2. La voce clonata è la stessa: il timbro vale in ogni lingua.
+XTTS_LANGUAGES = {"en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh-cn", "ja", "hu", "ko", "hi"}
 SAMPLE_RATE = 24000  # uscita di XTTS
 # Come usa i campioni XTTS (configurazione ufficiale): il timbro viene calcolato da ogni file
 # (fino a 30 s ciascuno) e mediato, quindi più vocali lo rendono più stabile; intonazione e
@@ -50,6 +52,42 @@ MAX_SECONDS_PER_SAMPLE = 30
 MIN_REFERENCE_SECONDS = 5
 MAX_SAMPLE_BYTES = 30 * 1024 * 1024
 QUANTIZE = os.environ.get("SGUARDO_INT8", "1") == "1"
+
+
+# Errori mostrati nella pagina, nella sua lingua: ogni lingua dell'interfaccia può avere i suoi testi
+# (se manca si usa l'italiano).
+MESSAGES = {
+    "it": {
+        "license": "Per usare la voce clonata bisogna prima accettare la licenza del modello.",
+        "sample_size": "File vuoto o troppo grande (massimo 30 MB).",
+        "no_sample": "Carica almeno un vocale.",
+        "too_short": "Dopo aver tolto i silenzi restano solo {seconds:.1f} s di voce: ne servono almeno {minimum}.",
+        "no_voice": "Nessuna voce clonata.",
+    },
+    "en": {
+        "license": "To use the cloned voice you must first accept the model license.",
+        "sample_size": "File empty or too large (30 MB at most).",
+        "no_sample": "Upload at least one voice message.",
+        "too_short": "After removing the silences only {seconds:.1f} s of voice remain: at least {minimum} are needed.",
+        "no_voice": "No cloned voice.",
+    },
+}
+
+
+class VoiceError(ValueError):
+    """Errore da mostrare nella pagina: codice e valori per i testi di MESSAGES."""
+
+    def __init__(self, code, **values):
+        self.code = code
+        self.values = values
+        super().__init__(MESSAGES["it"][code].format(**values))
+
+
+def error_message(error, lang):
+    """Testo di un errore nella lingua della pagina (gli altri errori restano come sono)."""
+    if isinstance(error, VoiceError):
+        return MESSAGES.get(lang, MESSAGES["it"]).get(error.code, MESSAGES["it"][error.code]).format(**error.values)
+    return str(error)
 
 
 class VoiceEngine:
@@ -92,7 +130,7 @@ class VoiceEngine:
             if self.model is not None:
                 return
             if not LICENSE_ACCEPTED.exists():
-                raise ValueError("Per usare la voce clonata bisogna prima accettare la licenza del modello.")
+                raise VoiceError("license")
             self.state = "caricamento"
             try:
                 import torch
@@ -125,7 +163,7 @@ class VoiceEngine:
 
     def add_sample(self, name, data):
         if not data or len(data) > MAX_SAMPLE_BYTES:
-            raise ValueError("File vuoto o troppo grande (massimo 30 MB).")
+            raise VoiceError("sample_size")
         SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
         safe = re.sub(r"[^\w.\-]", "_", pathlib.Path(name).name)[:80] or "vocale"
         (SAMPLES_DIR / safe).write_bytes(data)
@@ -144,10 +182,10 @@ class VoiceEngine:
         """Prepara il riferimento dai vocali caricati e salva la voce clonata."""
         samples = sorted(SAMPLES_DIR.glob("*")) if SAMPLES_DIR.exists() else []
         if not samples:
-            raise ValueError("Carica almeno un vocale.")
+            raise VoiceError("no_sample")
         references, seconds = build_references(samples, REFERENCES_DIR)
         if seconds < MIN_REFERENCE_SECONDS:
-            raise ValueError(f"Dopo aver tolto i silenzi restano solo {seconds:.1f} s di voce: ne servono almeno {MIN_REFERENCE_SECONDS}.")
+            raise VoiceError("too_short", seconds=seconds, minimum=MIN_REFERENCE_SECONDS)
         self.load()
         import torch
 
@@ -164,12 +202,17 @@ class VoiceEngine:
             shutil.rmtree(AUDIO_CACHE, ignore_errors=True)  # erano con la voce precedente
         return seconds
 
-    def synthesize(self, text, keep=False):
+    def synthesize(self, text, keep=False, language=LANGUAGE):
         """Restituisce la frase come file WAV (bytes) con la voce clonata.
-        keep: frase da conservare per sempre (frasi rapide)."""
+        keep: frase da conservare per sempre (frasi rapide).
+        language: lingua della frase (una di XTTS_LANGUAGES, altrimenti quella di partenza)."""
         if not LATENTS.exists():
-            raise ValueError("Nessuna voce clonata.")
-        name = hashlib.sha1(text.encode("utf-8")).hexdigest() + ".wav"
+            raise VoiceError("no_voice")
+        if language not in XTTS_LANGUAGES:
+            language = LANGUAGE
+        # Per la lingua di partenza il nome è quello di sempre, così le frasi già generate restano valide.
+        key = text if language == LANGUAGE else f"{language}\n{text}"
+        name = hashlib.sha1(key.encode("utf-8")).hexdigest() + ".wav"
         for folder in (KEPT_DIR, RECENT_DIR):
             if (folder / name).exists():
                 if folder is RECENT_DIR:
@@ -180,7 +223,7 @@ class VoiceEngine:
         with self._synth_lock:
             if cached.exists():  # generata da un'altra richiesta mentre questa aspettava
                 return cached.read_bytes()
-            out = self.model.inference(text, LANGUAGE, *self.latents, enable_text_splitting=True)
+            out = self.model.inference(text, language, *self.latents, enable_text_splitting=True)
             audio = to_wav_bytes(out["wav"], SAMPLE_RATE)
             cached.parent.mkdir(parents=True, exist_ok=True)
             cached.write_bytes(audio)

@@ -8,12 +8,25 @@
 //   largo che alto, quindi le lettere sono molto più grandi.
 // - "vertical": lettere una sotto l'altra, arrivano da destra (il Dasher classico).
 
-const VOWEL_ACCENTS = { a: ["à"], e: ["è", "é"], i: ["ì"], o: ["ò"], u: ["ù"] };
-const LETTERS = [..."abcdefghijklmnopqrstuvwxyz"].flatMap((c) => [c, ...(VOWEL_ACCENTS[c] ?? [])]);
+import { t } from "./i18n.js";
+
+// Vocali accentate dell'italiano: la lingua in uso passa le sue (vedi js/locales/).
+const ITALIAN_ACCENTS = { a: ["à"], e: ["è", "é"], i: ["ì"], o: ["ò"], u: ["ù"] };
 const SPACE = " ";
 const SPEAK = "\n"; // simbolo speciale: legge la frase
-const SYMBOLS = [...LETTERS, "'", SPACE, ".", "?", SPEAK];
-const LABELS = { [SPACE]: "␣", [SPEAK]: "Parla" };
+
+// Simboli della scrittura continua: lettere (con gli accenti della lingua), apostrofo, spazio,
+// punteggiatura e "Parla".
+function symbolsFor(accents) {
+  const letters = [..."abcdefghijklmnopqrstuvwxyz"].flatMap((c) => [c, ...(accents[c] ?? [])]);
+  return [...letters, "'", SPACE, ".", "?", SPEAK];
+}
+
+function labelFor(sym) {
+  if (sym === SPACE) return "␣";
+  if (sym === SPEAK) return t("kb.speak");
+  return sym.toUpperCase();
+}
 
 const UNIFORM_SHARE = 0.06; // ogni simbolo resta raggiungibile anche se il vocabolario non lo prevede
 const DEAD_ZONE = 0.08;     // sguardo vicino alla croce: si sta fermi
@@ -45,8 +58,11 @@ const PALETTES = {
 
 // Probabilità della lettera successiva, dalle parole del vocabolario pesate per frequenza.
 export class LetterModel {
-  // words: ordinate per frequenza; extra: { parola: conteggio } imparate dalla persona.
-  constructor(words, extra = {}) {
+  // words: ordinate per frequenza; extra: { parola: conteggio } imparate dalla persona;
+  // options: { accents, apostropheInWord } dalla lingua in uso (di default l'italiano).
+  constructor(words, extra = {}, { accents = ITALIAN_ACCENTS, apostropheInWord = false } = {}) {
+    this.symbols = symbolsFor(accents);
+    this.apostropheInWord = apostropheInWord;
     const weight = new Map();
     words.forEach((w, i) => weight.set(w, 1 / (i + 10)));
     for (const [w, n] of Object.entries(extra)) weight.set(w, (weight.get(w) ?? 0) + n * 0.05);
@@ -57,12 +73,12 @@ export class LetterModel {
 
   // Intervalli [start, end) in 0..1 per ogni simbolo, dato il testo scritto finora.
   children(text) {
-    const partial = text.match(/[^\s.?!']*$/)[0].toLowerCase();
+    const partial = text.match(this.apostropheInWord ? /[^\s.?!]*$/ : /[^\s.?!']*$/)[0].toLowerCase();
     const wordStart = partial === "";
     const key = `${partial}|${wordStart && text.trim() !== ""}|${/[.?!]\s*$/.test(text)}`;
     if (this.cache.has(key)) return this.cache.get(key);
 
-    const counts = new Map(SYMBOLS.map((s) => [s, 0]));
+    const counts = new Map(this.symbols.map((s) => [s, 0]));
     let total = 0;
     for (let i = this.lowerBound(partial); i < this.keys.length && this.keys[i].startsWith(partial); i++) {
       const [w, wt] = this.entries[i];
@@ -83,7 +99,7 @@ export class LetterModel {
         total *= 1.2;
       }
     }
-    const allowed = SYMBOLS.filter((s) => (s !== SPEAK || hasText) && !(wordStart && s === SPACE));
+    const allowed = this.symbols.filter((s) => (s !== SPEAK || hasText) && !(wordStart && s === SPACE));
     const uniform = UNIFORM_SHARE / allowed.length;
     let start = 0;
     const out = [];
@@ -305,7 +321,7 @@ export class Dasher {
         const font = Math.max(12, Math.min(56, size * 0.45, d * 0.7));
         ctx.fillStyle = c.sym === SPEAK ? this.palette.speakText : this.palette.text;
         ctx.font = `600 ${font}px system-ui, sans-serif`;
-        const label = LABELS[c.sym] ?? c.sym.toUpperCase();
+        const label = labelFor(c.sym);
         // La scritta sta sul lato rivolto verso la croce, al centro della parte visibile.
         const mid = Math.max(font / 2, Math.min(S - font / 2, (Math.max(a, 0) + Math.min(b, S)) / 2));
         if (this.horizontal) {

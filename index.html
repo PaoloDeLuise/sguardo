@@ -13,59 +13,65 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2714%27 fill=%27%231a1d24%27 stroke=%27%234fc3f7%27 stroke-width=%273%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%275%27 fill=%27%234fc3f7%27/%3E%3C/svg%3E">
 </head>
 <body>
+  <!-- I testi con data-i18n sono tradotti da js/i18n.js: quelli scritti qui sono l'italiano, che
+       resta visibile anche prima che parta lo script. -->
+
   <!-- Schermata iniziale -->
   <section id="start" class="screen">
     <h1>Sguardo</h1>
-    <p class="lead">Scrivere e parlare con gli occhi.</p>
+    <p class="lead" data-i18n="start.lead">Scrivere e parlare con gli occhi.</p>
     <ul class="tips">
-      <li>Metti il dispositivo fermo, all'altezza degli occhi, a 40–70 cm.</li>
-      <li>Serve luce sul viso: evita finestre alle spalle.</li>
-      <li>Durante la calibrazione segui il punto solo con gli occhi.</li>
+      <li data-i18n="start.tip1">Metti il dispositivo fermo, all'altezza degli occhi, a 40–70 cm.</li>
+      <li data-i18n="start.tip2">Serve luce sul viso: evita finestre alle spalle.</li>
+      <li data-i18n="start.tip3">Durante la calibrazione segui il punto solo con gli occhi.</li>
     </ul>
-    <label class="control-pick">Il puntatore si muove con
+    <label class="control-pick"><span data-i18n="start.control">Il puntatore si muove con</span>
       <select id="control-start" class="control-select">
-        <option value="eyes">gli occhi</option>
-        <option value="head">la testa</option>
-        <option value="both">occhi e testa</option>
+        <option value="eyes" data-i18n="start.control.eyes">gli occhi</option>
+        <option value="head" data-i18n="start.control.head">la testa</option>
+        <option value="both" data-i18n="start.control.both">occhi e testa</option>
       </select>
     </label>
-    <button id="btn-start" class="big">Avvia fotocamera</button>
+    <label class="lang-pick"><span data-i18n="start.language">Lingua</span>
+      <select id="lang-start" class="lang-select"></select>
+    </label>
+    <button id="btn-start" class="big" data-i18n="start.button">Avvia fotocamera</button>
     <p id="start-status" class="status"></p>
-    <p class="source-link"><a href="https://github.com/PaoloDeLuise/sguardo" target="_blank" rel="noopener">Codice sorgente</a> · software libero, licenza AGPL-3.0</p>
+    <p class="source-link" data-i18n-html="start.source"><a href="https://github.com/PaoloDeLuise/sguardo" target="_blank" rel="noopener">Codice sorgente</a> · software libero, licenza AGPL-3.0</p>
 
     <!-- Voce clonata: la prepara chi assiste, una volta sola -->
     <div id="voice-setup" class="voice-card" hidden>
-      <h2>Voce</h2>
+      <h2 data-i18n="voice.title">Voce</h2>
       <p id="voice-status" class="status"></p>
       <label id="voice-license" class="license" hidden>
         <input type="checkbox" id="voice-license-check">
-        <span>Accetto la <a href="https://coqui.ai/cpml" target="_blank" rel="noopener">licenza del modello XTTS-v2</a>
+        <span data-i18n-html="voice.license">Accetto la <a href="https://coqui.ai/cpml" target="_blank" rel="noopener">licenza del modello XTTS-v2</a>
         (Coqui Public Model License: solo uso non commerciale). Al primo uso il modello (circa 1,8 GB) viene scaricato.</span>
       </label>
       <div id="voice-controls" class="voice-controls">
-        <label class="file-button">Scegli vocali
+        <label class="file-button"><span data-i18n="voice.choose">Scegli vocali</span>
           <input type="file" id="voice-files" accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav" multiple>
         </label>
-        <button id="btn-record">● Registra</button>
+        <button id="btn-record" data-i18n="voice.record">● Registra</button>
         <span id="voice-files-label" class="muted"></span>
-        <button id="btn-clone">Clona la voce</button>
+        <button id="btn-clone" data-i18n="voice.clone">Clona la voce</button>
       </div>
       <div id="record-panel" class="record-panel" hidden>
-        <p class="muted">Leggi ad alta voce, con calma e con il tono di tutti i giorni (bastano 20–30 secondi):</p>
-        <p class="read-aloud">Buongiorno! Oggi è una bella giornata e ho voglia di fare due chiacchiere.
+        <p class="muted" data-i18n="voice.readHint">Leggi ad alta voce, con calma e con il tono di tutti i giorni (bastano 20–30 secondi):</p>
+        <p class="read-aloud" data-i18n="voice.readAloud">Buongiorno! Oggi è una bella giornata e ho voglia di fare due chiacchiere.
           Stamattina ho bevuto un caffè e ho letto il giornale. Più tardi vorrei sentire i miei amici,
           magari organizzare una cena insieme, con un buon piatto di pasta e un bicchiere di vino.
           Che ne dite? Io direi di sì, ci divertiremmo davvero tanto.</p>
         <div class="voice-controls">
           <span id="record-time" class="record-time">0:00</span>
-          <button id="btn-record-stop">■ Ferma</button>
+          <button id="btn-record-stop" data-i18n="voice.stop">■ Ferma</button>
         </div>
       </div>
       <audio id="record-preview" controls hidden></audio>
       <div id="voice-try" class="voice-controls" hidden>
-        <input id="voice-test" value="Ciao, questa è la mia voce." aria-label="Frase di prova">
-        <button id="btn-voice-test">Ascolta</button>
-        <button id="btn-voice-reset" class="secondary">Elimina voce</button>
+        <input id="voice-test" value="Ciao, questa è la mia voce." data-i18n-value="voice.testPhrase" aria-label="Frase di prova" data-i18n-aria="voice.testLabel">
+        <button id="btn-voice-test" data-i18n="voice.listen">Ascolta</button>
+        <button id="btn-voice-reset" class="secondary" data-i18n="voice.reset">Elimina voce</button>
       </div>
     </div>
   </section>
@@ -79,26 +85,27 @@
     <div id="last-spoken" class="last-spoken"></div>
     <div class="controls">
       <span class="dwell">
-        Fissazione
-        <button id="dwell-minus" aria-label="Riduci tempo">−</button>
+        <span data-i18n="bar.dwell">Fissazione</span>
+        <button id="dwell-minus" aria-label="Riduci tempo" data-i18n-aria="bar.dwellMinus">−</button>
         <b id="dwell-value">1.0 s</b>
-        <button id="dwell-plus" aria-label="Aumenta tempo">+</button>
+        <button id="dwell-plus" aria-label="Aumenta tempo" data-i18n-aria="bar.dwellPlus">+</button>
       </span>
-      <select id="control-toolbar" class="control-select" aria-label="Cosa muove il puntatore" title="Cosa muove il puntatore: gli occhi, la testa o entrambi (cambiandolo serve una nuova calibrazione)">
-        <option value="eyes">Controllo: occhi</option>
-        <option value="head">Controllo: testa</option>
-        <option value="both">Controllo: occhi + testa</option>
+      <select id="control-toolbar" class="control-select" aria-label="Cosa muove il puntatore" data-i18n-aria="bar.controlLabel" title="Cosa muove il puntatore: gli occhi, la testa o entrambi (cambiandolo serve una nuova calibrazione)" data-i18n-title="bar.controlTitle">
+        <option value="eyes" data-i18n="bar.control.eyes">Controllo: occhi</option>
+        <option value="head" data-i18n="bar.control.head">Controllo: testa</option>
+        <option value="both" data-i18n="bar.control.both">Controllo: occhi + testa</option>
       </select>
-      <button id="btn-draw" title="Scrittura a mano: il puntatore disegna le lettere (la penna si alza e si abbassa chiudendo gli occhi mezzo secondo)">Scrivi a mano</button>
+      <select id="lang-toolbar" class="lang-select" aria-label="Lingua" data-i18n-aria="bar.language" title="Lingua" data-i18n-title="bar.language"></select>
+      <button id="btn-draw" title="" data-i18n-title="bar.drawTitle" data-i18n="bar.draw">Scrivi a mano</button>
       <button id="btn-dot">Punto: sì</button>
-      <button id="btn-last-result" title="Riapre il risultato dell'ultima calibrazione completa (per vedere gli errori o salvare i dati)">Ultimo risultato</button>
-      <button id="btn-calib">Ricalibra</button>
-      <button id="btn-reset" title="Cancella tutte le calibrazioni salvate (per una persona diversa)">Nuova persona</button>
+      <button id="btn-last-result" title="" data-i18n-title="bar.lastResultTitle" data-i18n="bar.lastResult">Ultimo risultato</button>
+      <button id="btn-calib" data-i18n="bar.recalibrate">Ricalibra</button>
+      <button id="btn-reset" title="" data-i18n-title="bar.newPersonTitle" data-i18n="bar.newPerson">Nuova persona</button>
     </div>
   </header>
 
   <!-- Testo in composizione -->
-  <div id="compose" hidden><span id="compose-text"></span><span class="caret"></span><span class="hint">occhi chiusi 2 s → menu</span><span id="cam-chip" class="cam-chip" title="Fotocamera: volto riconosciuto e fotogrammi al secondo"></span><button id="btn-tools" class="tools-toggle" aria-label="Strumenti per chi assiste" title="Strumenti per chi assiste">⚙</button></div>
+  <div id="compose" hidden><span id="compose-text"></span><span class="caret"></span><span class="hint" data-i18n="compose.hint">occhi chiusi 2 s → menu</span><span id="cam-chip" class="cam-chip" title="Fotocamera: volto riconosciuto e fotogrammi al secondo" data-i18n-title="compose.camTitle"></span><button id="btn-tools" class="tools-toggle" aria-label="Strumenti per chi assiste" data-i18n-aria="compose.tools" title="Strumenti per chi assiste" data-i18n-title="compose.tools">⚙</button></div>
 
   <!-- Tabellone: tastiera e frasi rapide -->
   <main id="board" hidden></main>
@@ -124,8 +131,8 @@
       <h2 id="result-title"></h2>
       <div id="result-body"></div>
       <div class="row">
-        <button id="btn-diag" hidden>Vedi errori</button>
-        <button id="btn-download" hidden>Salva dati</button>
+        <button id="btn-diag" hidden data-i18n="result.showErrors">Vedi errori</button>
+        <button id="btn-download" hidden data-i18n="result.save">Salva dati</button>
       </div>
     </div>
     <div id="result-cells" class="cells"></div>
@@ -134,8 +141,8 @@
   <!-- Avviso: postura cambiata, ricalibrazione rapida in arrivo -->
   <section id="prompt" hidden>
     <div class="prompt-info">
-      <h2>Hai cambiato posizione</h2>
-      <p>Ricalibrazione rapida tra <b id="prompt-count">5</b> secondi: segui il punto con gli occhi.</p>
+      <h2 data-i18n="prompt.title">Hai cambiato posizione</h2>
+      <p data-i18n-html="prompt.text">Ricalibrazione rapida tra <b id="prompt-count">5</b> secondi: segui il punto con gli occhi.</p>
     </div>
     <div id="prompt-cells" class="cells"></div>
   </section>

@@ -1,0 +1,22 @@
+data/words-de.txt
+
+Le 30.000 parole tedesche più frequenti, in ordine di frequenza, ricavate da
+FrequencyWords di Hermit Dave (https://github.com/hermitdave/FrequencyWords,
+file content/2018/de/de_50k.txt), a sua volta basato sui sottotitoli di OpenSubtitles.
+
+Modifiche: tenute solo le parole in lettere minuscole a-z, ä, ö, ü, ß; tolti i
+conteggi, i token con cifre, trattini, punti o apostrofi (e-mail, u-bahn, mr. ecc.),
+le lettere singole, le sequenze senza vocale, le onomatopee (äh, ähm, hm, hmm,
+uff ecc.; tenute ach, oh, ah), le sigle e i nomi dei sottotitoli (www, sync,
+untertitel, übersetzt, korrigiert ecc.) e gli insulti razzisti. Se la stessa
+parola compariva più volte è stata tenuta solo la prima. I nomi propri sono stati
+lasciati.
+
+Limite: in tedesco i sostantivi si scrivono con l'iniziale maiuscola, ma la fonte
+è tutta in minuscolo e il file non ricostruisce le maiuscole (wasser, non Wasser).
+
+Licenza: i dati di FrequencyWords sono distribuiti con licenza
+Creative Commons Attribuzione - Condividi allo stesso modo 4.0 Internazionale (CC BY-SA 4.0),
+https://creativecommons.org/licenses/by-sa/4.0/
+Questo file, essendo un adattamento, è distribuito con la stessa licenza.
+(Il codice di FrequencyWords è invece MIT; qui non ne viene usato.)

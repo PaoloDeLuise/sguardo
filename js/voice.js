@@ -6,10 +6,13 @@ const MAX_CACHED = 60;
 // un altro sito non può aggiungerla (protezione dalle richieste partite da altri siti).
 export const API_HEADERS = { "X-Sguardo": "1" };
 
+// Lingua della frase da generare e dei messaggi d'errore del server (la imposta main.js).
+export const voiceLanguage = { xtts: "it", ui: "it" };
+
 export class ClonedVoice {
   constructor() {
     this.status = null;
-    this.cache = new Map(); // testo -> Promise<URL dell'audio>
+    this.cache = new Map(); // lingua + testo -> Promise<URL dell'audio>
     this.player = new Audio();
     this.urgent = 0; // richieste della persona in corso: la preparazione in background aspetta
   }
@@ -51,17 +54,19 @@ export class ClonedVoice {
   // L'audio di ogni frase si genera una volta sola.
   // keep: da conservare per sempre sul PC (frasi rapide); le altre restano solo per un po'.
   audioFor(text, keep = false) {
-    if (!this.cache.has(text)) {
+    // La stessa frase in un'altra lingua è un altro audio.
+    const key = `${voiceLanguage.xtts}\n${text}`;
+    if (!this.cache.has(key)) {
       const pending = fetch("/api/tts", {
         method: "POST",
-        headers: { ...API_HEADERS, "Content-Type": "application/json" },
-        body: JSON.stringify({ text, keep }),
+        headers: { ...API_HEADERS, "X-Sguardo-Lang": voiceLanguage.ui, "Content-Type": "application/json" },
+        body: JSON.stringify({ text, keep, lang: voiceLanguage.xtts }),
       }).then(async (res) => {
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
         return URL.createObjectURL(await res.blob());
       });
-      pending.catch(() => this.cache.delete(text));
-      this.cache.set(text, pending);
+      pending.catch(() => this.cache.delete(key));
+      this.cache.set(key, pending);
       // Si tengono le ultime frasi (le frasi rapide sono le prime e vengono richieste spesso).
       while (this.cache.size > MAX_CACHED) {
         const [oldest, url] = this.cache.entries().next().value;
@@ -70,11 +75,11 @@ export class ClonedVoice {
       }
     } else {
       // Usata di nuovo: diventa la più recente.
-      const url = this.cache.get(text);
-      this.cache.delete(text);
-      this.cache.set(text, url);
+      const url = this.cache.get(key);
+      this.cache.delete(key);
+      this.cache.set(key, url);
     }
-    return this.cache.get(text);
+    return this.cache.get(key);
   }
 
   async play(text) {
@@ -102,7 +107,7 @@ export class ClonedVoice {
 }
 
 async function post(path, body) {
-  const res = await fetch(path, { method: "POST", headers: API_HEADERS, body });
+  const res = await fetch(path, { method: "POST", headers: { ...API_HEADERS, "X-Sguardo-Lang": voiceLanguage.ui }, body });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
