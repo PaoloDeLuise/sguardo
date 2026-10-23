@@ -75,6 +75,28 @@ d = make("tilt");
 run(d, { roll: 178 }, 500);
 assert.equal(run(d, { roll: -157 }, 1000), 1, "da 178° a -157° sono 25° di inclinazione, non 335°");
 
+// Un'inclinazione lenta trascina il puntatore per mezzo secondo prima di superare la soglia:
+// i punti vanno tolti da quando il gesto è cominciato, non solo dagli ultimi istanti.
+d = make("tilt");
+run(d, { roll: 0 }, 500);
+let firedAt = null, startedAt = null;
+for (let t = d.clock, end = t + 2500; t < end; t += FRAME) {
+  const roll = Math.min(25, ((t - d.clock) / 1000) * 30); // 30° al secondo
+  if (startedAt === null && roll >= 8) startedAt = t; // 8° = poco oltre metà della soglia
+  if (d.update({ face: true, t, eyes: [0, 0], jaw: 0, roll }) && firedAt === null) firedAt = t;
+}
+assert.ok(firedAt !== null, "l'inclinazione lenta scatta");
+const back = d.backMsAt(firedAt);
+assert.ok(back > make("tilt").backMs, "si taglia più indietro del minimo");
+assert.ok(back >= firedAt - startedAt, "fino a quando il gesto è cominciato");
+assert.ok(back <= 800, "ma mai oltre il limite");
+// Un gesto rapido taglia il minimo.
+d = make("mouth");
+run(d, { jaw: 0 }, 300);
+let quick = null;
+for (let t = d.clock, end = t + 600; t < end; t += FRAME) if (d.update({ face: true, t, eyes: [0, 0], jaw: 0.6, roll: 0 })) quick = t;
+assert.ok(d.backMsAt(quick) < 450, "gesto rapido: poco da tagliare");
+
 // Senza volto nessun gesto, e il livello è zero.
 d = make("mouth");
 assert.equal(d.update({ face: false, t: 0 }), false);

@@ -180,4 +180,39 @@ assert.ok(kept.every(([, y]) => y < 130), "i punti spostati dal gesto non sono n
 assert.ok(kept.at(-1)[0] > 380, "il tratto regolare resta");
 void gestureAt;
 
+// 11) Uscire dall'area per la cella: il percorso di uscita non resta nel tratto. Si torna
+// all'ultima pausa a fine tratto, così il tratto finisce dove la persona si è fermata.
+pad.penMode = "cell";
+pad.strokes = [];
+pad.pen = false;
+pad.arming = false;
+pad.waiting = false;
+move(100, 200, 100);
+pad.requestPen();
+move(120, 200, 100); // rientra
+rest(120, 200, 900); // preparazione: la penna scende
+assert.equal(pad.pen, true);
+move(120, 400, 500);
+move(400, 400, 500); // una "L"
+rest(400, 400, 400); // pausa a fine tratto
+move(780, 400, 250); // percorso veloce verso destra...
+move(900, 400, 80); // ...fino a uscire dall'area
+assert.equal(pad.pen, false, "uscendo la penna si alza");
+const exited = pad.strokes.at(-1);
+assert.ok(exited.every(([x]) => x < 440), "il percorso di uscita non è nel tratto");
+assert.ok(exited.some(([x, y]) => x > 380 && y > 380), "ma la L fino alla pausa sì");
+
+// Senza pausa non si sa dove finisce il tratto: si tolgono gli ultimi istanti.
+pad.requestPen();
+move(120, 200, 100);
+rest(120, 200, 900);
+assert.equal(pad.pen, true);
+move(120, 400, 500);
+move(600, 400, 500);
+move(900, 400, 300); // esce senza fermarsi
+assert.equal(pad.pen, false);
+const cut = pad.strokes.at(-1);
+assert.ok(cut.at(-1)[0] < 790, "gli ultimi istanti prima dell'uscita sono tolti");
+assert.ok(cut.length > 10, "il resto del tratto resta");
+
 console.log("ok");

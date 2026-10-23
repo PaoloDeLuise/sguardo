@@ -14,6 +14,8 @@ export const GESTURE_MODES = ["wink", "mouth", "tilt"];
 const THRESHOLDS = { wink: { on: 0.6, other: 0.35 }, mouth: { on: 0.35 }, tilt: { on: 15 } }; // tilt in gradi
 const HOLD_MS = { wink: 150, mouth: 200, tilt: 250 };
 const RELEASE = 0.6;        // si disattiva sotto questa parte della soglia
+const ONSET = 0.5;          // il gesto "comincia" quando il livello supera questa parte della soglia
+const MAX_BACK_MS = 800;    // quanto indietro al massimo si tolgono i punti disegnati durante il gesto
 const BASELINE_RATE = 0.02; // quanto in fretta la posizione "dritta" segue la testa (per fotogramma)
 
 const wrap = (deg) => ((((deg + 180) % 360) + 360) % 360) - 180;
@@ -29,6 +31,7 @@ export class GestureDetector {
     this.level = 0;
     this.active = false;
     this.since = null;
+    this.onsetAt = null;  // da quando il livello è continuamente sopra ONSET
     this.handled = false;
     this.baseline = null; // inclinazione "dritta" della testa
   }
@@ -60,6 +63,8 @@ export class GestureDetector {
   // Un fotogramma. Restituisce true quando il gesto scatta.
   update(f) {
     this.level = this.measure(f);
+    if (this.level >= ONSET) this.onsetAt ??= f.t;
+    else this.onsetAt = null;
     if (!this.active && this.level >= 1) {
       this.active = true;
       this.since = f.t;
@@ -75,7 +80,14 @@ export class GestureDetector {
     return false;
   }
 
-  // Quanto tempo prima dello scatto è cominciato il gesto: i punti disegnati in quel momento
-  // erano già disturbati dal gesto e si tolgono dalla fine del tratto.
+  // Quanto indietro, da t, tagliare il tratto: i punti disegnati da quando il gesto è cominciato
+  // (non solo da quando è scattato) sono già mossi dal gesto. Un'inclinazione lenta, per esempio,
+  // trascina il puntatore per mezzo secondo prima di superare la soglia.
+  backMsAt(t) {
+    const since = this.onsetAt == null ? 0 : t - this.onsetAt;
+    return Math.min(MAX_BACK_MS, Math.max(this.backMs, since + 100));
+  }
+
+  // Minimo: il tempo di tenuta più un margine.
   get backMs() { return HOLD_MS[this.mode] + 120; }
 }

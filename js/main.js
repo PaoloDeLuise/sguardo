@@ -200,7 +200,7 @@ function watchGesture(f) {
   }
   gestures.mode = settings.penMode;
   gestures.sensitivity = settings.penSens;
-  if (gestures.update(f)) drawPad?.togglePen(f.t, gestures.backMs);
+  if (gestures.update(f)) drawPad?.togglePen(f.t, gestures.backMsAt(f.t));
   if (drawPad) {
     drawPad.level = gestures.level;
     drawPad.levelLabel = PEN_MODES[settings.penMode];
