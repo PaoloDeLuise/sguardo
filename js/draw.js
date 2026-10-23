@@ -6,7 +6,9 @@
 //   di `startDelayMs` in cui un puntatore "fantasma" mostra dove partirà il tratto, e ci si può
 //   posizionare meglio; la penna scende alla fine, dove si trova il puntatore. Un altro gesto
 //   durante la preparazione annulla. Per alzare la penna il gesto vale subito;
-// Alzando la penna si tolgono dal tratto i punti che il gesto o l'uscita hanno disegnato senza
+// In ogni modo la penna si alza anche stando fermi (`stillMs`, con lo stesso cerchio): non serve
+// nessun gesto e il puntatore non si muove, quindi non c'è niente da togliere dal tratto.
+// Alzando la penna con un gesto o uscendo dall'area si tolgono dal tratto i punti che il gesto o l'uscita hanno disegnato senza
 // volerlo: con un gesto, quelli da quando il gesto è cominciato; uscendo dall'area (per esempio
 // verso la cella "Penna"), il percorso di uscita, tornando all'ultima pausa a fine tratto.
 // - "cell": una cella "Penna" accanto al disegno (requestPen). La preparazione parte da quando
@@ -26,6 +28,7 @@ const FLASH_MS = 1000;
 const PAUSE_MS = 150;        // una pausa a fine tratto: fermi (entro stillPx) per almeno così
 const EXIT_LOOKBACK_MS = 1500; // quanto indietro si cerca la pausa prima dell'uscita
 const EXIT_FALLBACK_MS = 300;  // senza pausa si tolgono comunque gli ultimi istanti
+const STILL_KEEP_MS = 100;     // alzando la penna da fermo si tiene del riposo solo l'inizio: il resto è tremolio
 
 const PALETTES = {
   dark: { bg: "#0f1115", ink: "#4fc3f7", penUp: "#ffb300", text: "#9aa3b2", frame: "#262b36", flash: "#f2f4f8" },
@@ -157,9 +160,14 @@ export class DrawPad {
     if (down === this.pen) return;
     this.pen = down;
     this.penUpAt = t;
+    if (!this.arming) this.progress = 0;
     if (down) {
       const c = this.cursor;
       this.strokes.push(c ? [[c.x, c.y, t]] : []);
+      // Per alzarla da ferma si deve prima muovere: appena abbassata il puntatore è ancora lì.
+      this.anchor = c ? { x: c.x, y: c.y } : null;
+      this.stillSince = t;
+      this.armed = false;
     } else {
       const stroke = this.strokes.at(-1);
       if (exit && stroke.length > 2) this.trimExit(stroke, t);
@@ -201,7 +209,10 @@ export class DrawPad {
         const last = stroke.at(-1);
         if (!last || Math.hypot(c.x - last[0], c.y - last[1]) >= MIN_POINT_GAP_PX) stroke.push([c.x, c.y, t]);
       }
-      if (!this.pointerPens && this.penMode === "still") this.watchStill(c, t);
+      if (!this.pointerPens) {
+        if (this.penMode === "still") this.watchStill(c, t);
+        else if (this.pen) this.watchStill(c, t, true); // gesti e cella: da fermi si alza soltanto
+      }
       if (this.arming) {
         this.progress = (t - this.armedAt) / this.startDelayMs;
         if (this.progress >= 1) {
@@ -216,8 +227,8 @@ export class DrawPad {
     if (!this.pen && !this.arming && this.strokes.length && t - this.penUpAt >= this.gapMs) this.finish();
   }
 
-  // Fermo abbastanza a lungo: la penna cambia stato.
-  watchStill(c, t) {
+  // Fermo abbastanza a lungo: la penna cambia stato (liftOnly: si alza soltanto).
+  watchStill(c, t, liftOnly = false) {
     if (!this.anchor || Math.hypot(c.x - this.anchor.x, c.y - this.anchor.y) > this.stillPx) {
       this.anchor = { x: c.x, y: c.y };
       this.stillSince = t;
@@ -230,7 +241,8 @@ export class DrawPad {
     if (this.progress >= 1) {
       this.armed = false;
       this.progress = 0;
-      this.setPen(!this.pen, t);
+      if (this.pen) this.setPen(false, t, Math.max(0, t - this.stillSince - STILL_KEEP_MS));
+      else if (!liftOnly) this.setPen(true, t);
     }
   }
 
@@ -339,7 +351,7 @@ export class DrawPad {
     ctx.fillStyle = this.pen ? p.ink : p.penUp;
     const GESTURES = { wink: "fai un occhiolino", mouth: "apri la bocca", tilt: "inclina la testa" };
     const how = this.pointerPens ? "tieni premuto" : this.penMode === "still" ? "fermo un attimo" : this.penMode === "cell" ? "scegli «Penna» e rientra qui" : GESTURES[this.penMode];
-    const up = this.pointerPens ? "rilascia" : this.penMode === "still" ? "fermo un attimo" : this.penMode === "cell" ? "fermati un attimo ed esci dall'area" : `${GESTURES[this.penMode]} di nuovo`;
+    const up = this.pointerPens ? "rilascia" : this.penMode === "still" ? "fermo un attimo" : this.penMode === "cell" ? "fermo un attimo, o esci dall'area" : `fermo un attimo, o ${GESTURES[this.penMode]} di nuovo`;
     const cancel = this.penMode === "cell" ? "esci dall'area per annullare" : "ripeti il gesto per annullare";
     ctx.fillText(this.waiting ? "✎ penna pronta: torna nell'area di disegno, la preparazione parte quando rientri"
       : this.arming ? `✎ posizionati: la penna sta per scendere (${cancel})`

@@ -215,4 +215,34 @@ const cut = pad.strokes.at(-1);
 assert.ok(cut.at(-1)[0] < 790, "gli ultimi istanti prima dell'uscita sono tolti");
 assert.ok(cut.length > 10, "il resto del tratto resta");
 
+// 12) Con i gesti e con la cella la penna si alza anche stando fermi (senza gesto): niente drift.
+for (const mode of ["wink", "cell"]) {
+  pad.penMode = mode;
+  pad.strokes = [];
+  pad.pen = false;
+  pad.arming = false;
+  pad.waiting = false;
+  move(100, 200, 100);
+  if (mode === "cell") { pad.requestPen(); move(120, 200, 100); } else pad.togglePen(t);
+  rest(120, 200, 900); // preparazione: la penna scende
+  assert.equal(pad.pen, true, `${mode}: penna giù`);
+  rest(120, 200, 1500);
+  assert.equal(pad.pen, true, `${mode}: appena abbassata, restare fermi non la alza (prima ci si muove)`);
+  move(120, 400, 500);
+  move(400, 400, 500); // una "L"
+  assert.equal(pad.pen, true);
+  rest(400, 400, 400); // pausa breve a metà: non basta
+  assert.equal(pad.pen, true, `${mode}: una pausa breve non alza la penna`);
+  move(500, 400, 200);
+  rest(500, 400, 1200);
+  assert.equal(pad.pen, false, `${mode}: fermi abbastanza a lungo la penna si alza`);
+  const lifted = pad.strokes.at(-1);
+  assert.ok(lifted.at(-1)[0] > 480 && lifted.at(-1)[0] < 520, `${mode}: il tratto finisce dove si è fermato`);
+  assert.ok(lifted.filter(([x]) => x > 490).length < 12, `${mode}: il tremolio del riposo finale non riempie il tratto`);
+  // ora si può andare a una cella senza lasciare segno
+  const n = lifted.length;
+  move(900, 400, 300);
+  assert.equal(pad.strokes.at(-1).length, n, `${mode}: a penna alzata spostarsi non disegna`);
+}
+
 console.log("ok");

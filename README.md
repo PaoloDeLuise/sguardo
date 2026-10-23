@@ -163,13 +163,19 @@ con gli occhi.
      resta fermo. La **soglia** dei gesti si regola nel menu (*Gesto più facile / più difficile*):
      sul telefono i segnali sono più rumorosi che sul portatile.
 
-     **Alzare la penna senza rovinare il tratto:** mentre si fa il gesto, o si esce dall'area, il
-     puntatore continua a seguire la testa e disegnerebbe ciò che non si vuole. Quindi, alzando la
-     penna, si tolgono dal tratto i punti disegnati *da quando il gesto è cominciato* (non solo
-     da quando è scattato: un'inclinazione lenta trascina il puntatore per mezzo secondo) e, con
-     la cella, il percorso di uscita: il tratto torna all'ultima **pausa** a fine tratto. Per
-     questo, prima di andare alla cella, **fermati un attimo dove il tratto finisce**; se non c'è
-     una pausa si tolgono solo gli ultimi istanti.
+     **Alzare la penna:** con i gesti e con la cella, la penna si alza anche **stando fermi** (circa
+     0,7 s, regolabile nel menu), con lo stesso cerchio che si riempie attorno al puntatore. È il
+     modo più semplice: niente gesto, il puntatore non si muove, e il tremolio del riposo non
+     entra nel tratto (si tiene solo l'inizio della pausa). Serve prima muoversi: appena abbassata
+     la penna, restare fermi non la rialza. Una pausa breve a metà tratto non basta: se la penna
+     si alza troppo spesso, allunga l'attesa; se è lenta, accorciala.
+
+     In alternativa si alza con il gesto, o uscendo dall'area (cella). In quei casi il puntatore
+     continua a seguire la testa e disegnerebbe ciò che non si vuole, quindi si tolgono dal tratto
+     i punti disegnati *da quando il gesto è cominciato* (non solo da quando è scattato: un'inclinazione
+     lenta trascina il puntatore per mezzo secondo) e, uscendo, il percorso di uscita: il tratto
+     torna all'ultima pausa a fine tratto. Per questo, prima di andare alla cella, fermati un
+     attimo dove il tratto finisce; senza pausa si tolgono solo gli ultimi istanti.
 
      A penna alzata il puntatore si muove senza lasciare segno; uscendo dall'area di disegno la
      penna si alza da sola.

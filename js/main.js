@@ -551,15 +551,16 @@ function showDrawMenu() {
     label: `${label}\n(ora ${now})`, kind: "cmd", action: () => { changeDraw(key, delta, lo, hi); showDrawMenu(); },
   });
   const delay = `${(settings.penDelayMs / 1000).toFixed(1)} s`;
+  const stillTime = `${(settings.penStillMs / 1000).toFixed(1)} s`;
   const items = [
     { label: "Avvia scrittura\na mano", kind: "suggest", action: startDraw },
     { label: `Penna:\n${PEN_MODES[settings.penMode]}`, hint: "tocca per cambiare", kind: "cmd", action: next },
     step("Pausa tra i disegni\npiù breve", "drawGapMs", -500, 1000, 5000, `${gap} s`),
     step("Pausa tra i disegni\npiù lunga", "drawGapMs", 500, 1000, 5000, `${gap} s`),
-    still ? step("Penna: attesa da fermo\npiù breve", "penStillMs", -100, 400, 1500, `${(settings.penStillMs / 1000).toFixed(1)} s`)
-      : step("Preparazione penna\npiù breve", "penDelayMs", -100, 200, 2000, delay),
-    still ? step("Penna: attesa da fermo\npiù lunga", "penStillMs", 100, 400, 1500, `${(settings.penStillMs / 1000).toFixed(1)} s`)
-      : step("Preparazione penna\npiù lunga", "penDelayMs", 100, 200, 2000, delay),
+    step(`Fermo per ${still ? "cambiare" : "alzare"} la penna:\nattesa più breve`, "penStillMs", -100, 400, 1500, stillTime),
+    step(`Fermo per ${still ? "cambiare" : "alzare"} la penna:\nattesa più lunga`, "penStillMs", 100, 400, 1500, stillTime),
+    still ? null : step("Preparazione penna\npiù breve", "penDelayMs", -100, 200, 2000, delay),
+    still ? null : step("Preparazione penna\npiù lunga", "penDelayMs", 100, 200, 2000, delay),
     gesture ? step("Gesto più facile\n(soglia più bassa)", "penSens", 0.1, 0.5, 2, settings.penSens.toFixed(1)) : null,
     gesture ? step("Gesto più difficile\n(soglia più alta)", "penSens", -0.1, 0.5, 2, settings.penSens.toFixed(1)) : null,
     taught ? { label: `Dimentica le lettere\nimparate (${taught})`, kind: "cmd remove", action: () => { for (const k of Object.keys(drawPersonal)) delete drawPersonal[k]; save(DRAW_KEY, drawPersonal); showDrawMenu(); } } : null,
