@@ -80,6 +80,7 @@
   <header id="toolbar" hidden>
     <div class="cam">
       <video id="video" playsinline muted></video>
+      <canvas id="cam-outline" class="outline" aria-hidden="true"></canvas>
       <span id="face-status" class="face-status">…</span>
     </div>
     <div id="last-spoken" class="last-spoken"></div>
@@ -143,6 +144,15 @@
     <div class="prompt-info">
       <h2 data-i18n="prompt.title">Hai cambiato posizione</h2>
       <p data-i18n-html="prompt.text">Ricalibrazione rapida tra <b id="prompt-count">5</b> secondi: segui il punto con gli occhi.</p>
+    </div>
+    <!-- Sagoma della posizione di calibrazione: chi assiste riporta la persona lì -->
+    <div id="prompt-view" class="prompt-view" hidden>
+      <div class="prompt-frame">
+        <video id="prompt-video" playsinline muted></video>
+        <canvas id="prompt-outline" class="outline" aria-hidden="true"></canvas>
+      </div>
+      <p id="prompt-hint" class="prompt-hint"></p>
+      <p class="muted" data-i18n="prompt.legend">Tratteggio: la posizione della calibrazione. Rientrando nella sagoma non serve ricalibrare.</p>
     </div>
     <div id="prompt-cells" class="cells"></div>
   </section>

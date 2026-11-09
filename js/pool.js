@@ -44,9 +44,12 @@ export class CalibrationPool {
   // Posa media della testa nell'ultima calibrazione: [tx, ty, tz, yaw, pitch].
   get lastPose() { return this.sessions.findLast((s) => s.kind !== "clic" && s.pose)?.pose ?? null; }
 
-  // points: [{ point: [x, y], samples: [features, ...] }]
-  add(kind, points, pose) {
-    this.sessions.push({ date: new Date().toISOString(), kind, pose, points: compact(points, true, this.mode) });
+  // Contorno medio del viso nell'ultima calibrazione (vedi silhouette.js), se salvato.
+  get lastOutline() { return this.sessions.findLast((s) => s.kind !== "clic" && s.pose)?.outline ?? null; }
+
+  // points: [{ point: [x, y], samples: [features, ...] }]. outline: contorno medio del viso.
+  add(kind, points, pose, outline = null) {
+    this.sessions.push({ date: new Date().toISOString(), kind, pose, ...(outline && { outline }), points: compact(points, true, this.mode) });
     const calibrations = this.sessions.filter((s) => s.kind !== "clic").slice(-MAX_SESSIONS);
     this.sessions = [...calibrations, ...this.sessions.filter((s) => s.kind === "clic")];
     this.save();

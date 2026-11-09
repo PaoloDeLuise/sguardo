@@ -137,6 +137,12 @@ button:disabled { opacity: 0.5; cursor: default; }
 .result-info, .prompt-info { text-align: center; padding: 16px; }
 .result-info h2, .prompt-info h2 { margin: 0 0 8px; }
 .prompt-info p { font-size: 1.3rem; color: var(--muted); }
+.prompt-view { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 16px; min-height: 0; flex: 1; }
+.prompt-frame { position: relative; flex: 1; min-height: 0; max-width: 100%; aspect-ratio: var(--video-aspect, 4 / 3); border-radius: 8px; overflow: hidden; background: #000; }
+.prompt-frame video { display: block; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
+.prompt-hint { margin: 0; font-size: 1.4rem; font-weight: 600; min-height: 1.4em; text-align: center; }
+.prompt-hint.ok { color: var(--ok); }
+.prompt-view .muted { margin: 0; font-size: 0.9rem; text-align: center; }
 #result-body { font-size: 1.1rem; line-height: 1.5; max-width: 40rem; margin: 0 auto; }
 #result-body p { margin: 4px 0; }
 #result-body .big-number { font-size: 2.2rem; font-weight: 700; color: var(--accent); }
@@ -185,6 +191,9 @@ body.compact #toast { bottom: 8px; padding: 8px 14px; font-size: 1rem; }
 }
 #video.face { border-color: var(--ok); }
 #video.blink { border-color: var(--warn); }
+/* Sagoma della calibrazione sopra la fotocamera, specchiata come il video */
+.outline { position: absolute; inset: 0; width: 100%; height: 100%; transform: scaleX(-1); pointer-events: none; }
+#cam-outline { inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); }
 .face-status { position: absolute; left: 0; right: 0; bottom: -2px; font-size: 0.65rem; text-align: center; text-shadow: 0 0 3px #000; }
 .last-spoken { flex: 1; font-size: 1.3rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }

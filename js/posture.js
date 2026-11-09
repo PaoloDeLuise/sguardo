@@ -42,6 +42,15 @@ export class PostureMonitor {
   }
 }
 
+// Quanto una posa è lontana da quella di riferimento, in multipli delle soglie: sotto 1 è
+// ancora la stessa postura, sopra 1 il controllo propone di ricalibrare.
+export function poseOffset(pose, ref) {
+  if (!pose || !ref) return null;
+  const moved = Math.hypot(pose[0] - ref[0], pose[1] - ref[1], pose[2] - ref[2]) / MOVE_THRESHOLD;
+  const turned = Math.max(Math.abs(pose[3] - ref[3]), Math.abs(pose[4] - ref[4])) / ANGLE_THRESHOLD;
+  return { moved, turned, value: Math.max(moved, turned) };
+}
+
 export function meanPose(poses) {
   const valid = poses.filter(Boolean);
   if (!valid.length) return null;

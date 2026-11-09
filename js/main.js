@@ -12,7 +12,8 @@ import { GESTURE_MODES, GestureDetector } from "./gestures.js";
 import { Lexicon, addPersonal, groupLetters, priorFromChildren, recognize, recognizeWord } from "./recognizer.js";
 import { Predictor, normalize } from "./predictor.js";
 import { CalibrationPool } from "./pool.js";
-import { PostureMonitor, meanPose } from "./posture.js";
+import { PostureMonitor, meanPose, poseOffset } from "./posture.js";
+import { OutlineAverage, drawOutlines, outlineHints } from "./silhouette.js";
 import { CLEAN_INDICES, CONTROL_MODES, STABILITY } from "./features.js";
 
 const $ = (s) => document.querySelector(s);
@@ -113,6 +114,9 @@ let snoozeUntil = 0;
 let eyesClosedSince = null;
 let menuOpenedByEyes = false;
 let countdown = null;
+let outlineAverage = null;  // contorno medio del viso durante la calibrazione in corso
+let promptReason = null;    // perché si propone la ricalibrazione: "posture" o "resize"
+let promptAlignedSince = null;
 
 // Ultimi fotogrammi, per capire se l'occhio è fermo (posizione orizzontale dell'iride
 // e palpebra superiore quasi costanti). Soglia ricavata dalle registrazioni: con l'occhio
@@ -130,6 +134,7 @@ let centerOffset = [0, 0];
 
 tracker.onFrame = (f) => {
   updateFaceStatus(f);
+  updateSilhouette(f);
   recent.push(f.face && !f.blink ? f.features : null);
   recentPoses.push(f.face ? f.pose : null);
   if (recent.length > STABLE_FRAMES) recent.shift();
@@ -137,6 +142,7 @@ tracker.onFrame = (f) => {
 
   if (collecting) {
     if (f.face) collecting.push({ t: Math.round(f.t), blink: f.blink, features: f.features, pose: f.pose, raw: f.raw() });
+    if (f.face && !f.blink) outlineAverage?.add(f.outline);
     return;
   }
   watchGesture(f);
@@ -188,6 +194,57 @@ function updateFaceStatus(f) {
   chip.classList.toggle("blink", f.face && f.blink);
 }
 
+// ---------- sagoma della posizione di calibrazione ----------
+
+// Sotto questa frazione delle soglie di posture.js la persona è tornata dove stava: per un
+// secondo di fila basta a chiudere l'avviso senza ricalibrare.
+const ALIGNED = 0.6;
+const ALIGNED_HOLD_MS = 1000;
+// Colori del tema, letti una volta per schermata (non a ogni fotogramma).
+let themeColors = null;
+const cssColor = (name) => {
+  themeColors ??= Object.fromEntries(["--accent", "--ok", "--warn", "--bad"].map((n) => [n, getComputedStyle(document.documentElement).getPropertyValue(n).trim()]));
+  return themeColors[name];
+};
+
+// Miniatura nella barra e, durante l'avviso, anteprima grande: sagoma tratteggiata della
+// calibrazione e viso attuale, verde se la posizione coincide, giallo se è vicina, rosso se no.
+// Il colore e le indicazioni solo con gli occhi: con la testa muoverla è il comando.
+function updateSilhouette(f) {
+  const ref = pool?.lastOutline ?? null;
+  const cur = f.face ? f.outline : null;
+  const off = settings.control === "eyes" && f.face && !f.blink ? poseOffset(f.pose, pool?.lastPose) : null;
+  const color = !off ? cssColor("--accent") || "#4fc3f7"
+    : off.value < ALIGNED ? cssColor("--ok") : off.value < 1 ? cssColor("--warn") : cssColor("--bad");
+
+  if (!$("#toolbar").hidden) drawOutlines($("#cam-outline"), video.videoWidth, video.videoHeight, ref, cur, color, "cover");
+  if (mode !== "prompt" || $("#prompt-view").hidden) return;
+
+  drawOutlines($("#prompt-outline"), video.videoWidth, video.videoHeight, ref, cur, color, "contain");
+  const hint = $("#prompt-hint");
+  const aligned = off && off.value < ALIGNED;
+  hint.classList.toggle("ok", !!aligned);
+  if (!f.face) hint.textContent = t("status.noFace");
+  else if (aligned) hint.textContent = `✓ ${t("prompt.hint.ok")}`;
+  else if (off) {
+    const keys = outlineHints(ref, cur);
+    if (!keys.length && off.turned >= 1) keys.push("turn");
+    hint.textContent = keys.map((k) => t(`prompt.hint.${k}`)).join(" · ");
+  } else hint.textContent = "";
+
+  // Tornata nella sagoma: niente ricalibrazione (solo se l'avviso era per la postura).
+  if (promptReason !== "posture" || !aligned) {
+    promptAlignedSince = null;
+    return;
+  }
+  promptAlignedSince ??= f.t;
+  if (f.t - promptAlignedSince >= ALIGNED_HOLD_MS) {
+    posture.setBaseline(pool.lastPose); // svuota la finestra, che ricorda ancora lo spostamento
+    show("board");
+    toast(t("prompt.found"));
+  }
+}
+
 function renderDot() {
   const visible = gaze && settings.showDot && (activeBoard() || mode === "dasher");
   dot.hidden = !visible;
@@ -234,7 +291,7 @@ function watchPosture(f) {
   if (!f.face || f.blink || !model) return;
   const now = performance.now();
   if (posture.update(f.pose, f.t) && now - lastRecalAt > RECAL_MIN_INTERVAL_MS && now > snoozeUntil) {
-    promptRecalibration();
+    promptRecalibration("posture");
   }
 }
 
@@ -377,7 +434,7 @@ function checkWindowShape() {
   if (!calibratedSize || !model) return;
   const dw = Math.abs(innerWidth - calibratedSize.w) / calibratedSize.w;
   const dh = Math.abs(innerHeight - calibratedSize.h) / calibratedSize.h;
-  if ((dw > RESIZE_TOLERANCE || dh > RESIZE_TOLERANCE) && mode !== "prompt") promptRecalibration();
+  if ((dw > RESIZE_TOLERANCE || dh > RESIZE_TOLERANCE) && mode !== "prompt") promptRecalibration("resize");
 }
 
 // ---------- schermate ----------
@@ -386,6 +443,7 @@ function show(name) {
   if (mode === "dasher" && name !== "dasher") dasher?.stop();
   if (mode === "draw" && name !== "draw") drawPad?.stop();
   mode = name;
+  themeColors = null;
   stopCountdown();
   for (const [k, el] of Object.entries(screens)) el.hidden = k !== name;
   $("#compose").hidden = !["board", "dasher", "draw"].includes(name);
@@ -782,6 +840,7 @@ async function calibrate(kind = "full") {
   if (!pool) return;
   const quick = kind === "quick";
   calibrator.aborted = false;
+  outlineAverage = new OutlineAverage();
   show("calib");
   try {
     const intro = [t(`calib.intro.${settings.control}.quick`), t(`calib.intro.${settings.control}.full`)];
@@ -815,7 +874,7 @@ async function calibrate(kind = "full") {
       };
     }
 
-    pool.add(kind, [...points, ...validation.map(({ point, samples }) => ({ point, samples: usable(samples) }))], pose);
+    pool.add(kind, [...points, ...validation.map(({ point, samples }) => ({ point, samples: usable(samples) }))], pose, outlineAverage.value);
     calibratedSize = { w: innerWidth, h: innerHeight };
     centerOffset = [0, 0]; // la nuova calibrazione definisce il centro
     model = pool.train();
@@ -852,8 +911,19 @@ async function calibrate(kind = "full") {
   }
 }
 
-function promptRecalibration() {
+function promptRecalibration(reason) {
+  promptReason = reason;
+  promptAlignedSince = null;
   show("prompt");
+  // La sagoma serve solo se c'è (calibrazioni precedenti a questa funzione non l'hanno salvata).
+  const view = $("#prompt-view");
+  view.hidden = !pool?.lastOutline;
+  if (!view.hidden) {
+    const pv = $("#prompt-video");
+    if (pv.srcObject !== video.srcObject) pv.srcObject = video.srcObject;
+    pv.play().catch(() => {});
+    if (video.videoWidth) view.style.setProperty("--video-aspect", `${video.videoWidth} / ${video.videoHeight}`);
+  }
   promptBoard.setLayout(3, 1, [
     null,
     { label: t("prompt.notNow"), kind: "cmd", action: () => { snoozeUntil = performance.now() + SNOOZE_MS; show("board"); } },

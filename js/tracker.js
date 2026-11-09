@@ -1,6 +1,7 @@
 // Rilevamento del volto con MediaPipe Face Landmarker ed estrazione delle
 // caratteristiche dello sguardo (posizione dell'iride nell'occhio + posa della testa).
 import { RAW_POINTS, eyeState, gazeFeatures } from "./features.js";
+import { outlineOf } from "./silhouette.js";
 import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 
 const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
@@ -93,6 +94,9 @@ export class GazeTracker {
     const eyes = [bs.eyeBlinkLeft ?? 0, bs.eyeBlinkRight ?? 0];
     const jaw = bs.jawOpen ?? 0;
 
-    return { t, face: true, blink, wink, eyes, jaw, features, pose, raw };
+    // Contorno del viso per la sagoma della posizione di calibrazione (silhouette.js).
+    const outline = outlineOf(lm);
+
+    return { t, face: true, blink, wink, eyes, jaw, features, pose, outline, raw };
   }
 }
