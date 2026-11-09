@@ -78,7 +78,7 @@
 
   <!-- Barra per chi assiste (si usa con mouse/tocco, non con lo sguardo) -->
   <header id="toolbar" hidden>
-    <div class="cam">
+    <div class="cam" id="cam" title="Posizione della calibrazione" data-i18n-title="bar.positionTitle">
       <video id="video" playsinline muted></video>
       <canvas id="cam-outline" class="outline" aria-hidden="true"></canvas>
       <span id="face-status" class="face-status">…</span>
@@ -142,8 +142,8 @@
   <!-- Avviso: postura cambiata, ricalibrazione rapida in arrivo -->
   <section id="prompt" hidden>
     <div class="prompt-info">
-      <h2 data-i18n="prompt.title">Hai cambiato posizione</h2>
-      <p data-i18n-html="prompt.text">Ricalibrazione rapida tra <b id="prompt-count">5</b> secondi: segui il punto con gli occhi.</p>
+      <h2 id="prompt-title" data-i18n="prompt.title">Hai cambiato posizione</h2>
+      <p id="prompt-text" data-i18n-html="prompt.text">Ricalibrazione rapida tra <b id="prompt-count">5</b> secondi: segui il punto con gli occhi.</p>
     </div>
     <!-- Sagoma della posizione di calibrazione: chi assiste riporta la persona lì -->
     <div id="prompt-view" class="prompt-view" hidden>

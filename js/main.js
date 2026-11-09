@@ -554,7 +554,9 @@ function showMenu() {
     { label: t("menu.dwellSlower", { s: seconds }), kind: "cmd", action: () => { changeDwell(250); showMenu(); } },
     { label: t("menu.dwellFaster", { s: seconds }), kind: "cmd", action: () => { changeDwell(-250); showMenu(); } },
     { label: t("menu.control", { c: t(`control.${settings.control}`) }), kind: "cmd", action: showControlMenu },
-    settings.control !== "eyes" ? { label: t("menu.recenter"), kind: "cmd", action: recenter } : null,
+    // Con gli occhi "Ricentra" non serve: al suo posto la sagoma della posizione di calibrazione.
+    settings.control !== "eyes" ? { label: t("menu.recenter"), kind: "cmd", action: recenter }
+      : pool?.lastOutline ? { label: t("menu.position"), kind: "cmd", action: showPosition } : null,
     { label: t("menu.dot", { v: t(settings.showDot ? "yes" : "no") }), kind: "cmd", action: () => { toggleDot(); showMenu(); } },
     {
       label: t("menu.background", { b: t(`background.${settings.background}`) }),
@@ -911,10 +913,16 @@ async function calibrate(kind = "full") {
   }
 }
 
-function promptRecalibration(reason) {
+// Avviso e controllo della posizione usano la stessa schermata. reason: "posture" o "resize"
+// (ricalibrazione in arrivo), "position" (aperta a mano, senza conto alla rovescia).
+function showPromptScreen(reason) {
   promptReason = reason;
   promptAlignedSince = null;
   show("prompt");
+  const manual = reason === "position";
+  $("#prompt-title").textContent = t(manual ? "position.title" : "prompt.title");
+  if (manual) $("#prompt-text").textContent = t("position.text");
+  else $("#prompt-text").innerHTML = t("prompt.text"); // testo nostro con il contatore, non dell'utente
   // La sagoma serve solo se c'è (calibrazioni precedenti a questa funzione non l'hanno salvata).
   const view = $("#prompt-view");
   view.hidden = !pool?.lastOutline;
@@ -924,6 +932,25 @@ function promptRecalibration(reason) {
     pv.play().catch(() => {});
     if (video.videoWidth) view.style.setProperty("--video-aspect", `${video.videoWidth} / ${video.videoHeight}`);
   }
+}
+
+// Dal menu o toccando la miniatura della fotocamera: dove stava la persona alla calibrazione.
+function showPosition() {
+  if (!pool?.lastOutline) {
+    toast(t("position.none"), 4000);
+    return;
+  }
+  showPromptScreen("position");
+  const back = () => { show("board"); keyboard.showMain(); };
+  promptBoard.setLayout(3, 1, [
+    { label: t("menu.recalibrate"), kind: "cmd", action: () => calibrate("quick") },
+    null,
+    { label: t("menu.back"), kind: "cmd", action: back },
+  ]);
+}
+
+function promptRecalibration(reason) {
+  showPromptScreen(reason);
   promptBoard.setLayout(3, 1, [
     null,
     { label: t("prompt.notNow"), kind: "cmd", action: () => { snoozeUntil = performance.now() + SNOOZE_MS; show("board"); } },
@@ -1298,6 +1325,7 @@ $("#dwell-plus").addEventListener("click", () => changeDwell(250));
 $("#btn-dot").addEventListener("click", toggleDot);
 $("#btn-draw").addEventListener("click", () => { if (keyboard && ["board", "dasher"].includes(mode)) startDraw(); });
 $("#btn-calib").addEventListener("click", () => calibrate("full"));
+$("#cam").addEventListener("click", () => { if (model) showPosition(); });
 for (const select of document.querySelectorAll("select.control-select")) {
   select.addEventListener("change", () => setControl(select.value));
 }
