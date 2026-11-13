@@ -48,7 +48,16 @@ SAMPLE_RATE = 24000  # uscita di XTTS
 # Come usa i campioni XTTS (configurazione ufficiale): il timbro viene calcolato da ogni file
 # (fino a 30 s ciascuno) e mediato, quindi più vocali lo rendono più stabile; intonazione e
 # modo di parlare vengono dai primi 30 s di tutti i file messi in fila.
-MAX_SECONDS_PER_SAMPLE = 30
+# Oltre i 30 s XTTS taglia: un file più lungo si divide in pezzi da 30 s, ognuno un riferimento
+# in più per il timbro, fino a MAX_SECONDS_PER_SAMPLE di parlato per file.
+SEGMENT_SECONDS = 30
+MAX_SECONDS_PER_SAMPLE = 120
+MIN_SEGMENT_SECONDS = 5  # una coda più corta peserebbe sul timbro quanto un pezzo intero
+# Pulizia leggera prima di togliere i silenzi: via i rumori bassi (ronzio, vento, colpi sul
+# microfono) e un po' del rumore di fondo costante (fruscio, ventola). Poco per scelta: una
+# pulizia forte lascia un suono metallico, e il modello clonerebbe anche quello. Con meno
+# rumore di fondo, poi, la soglia dei silenzi funziona anche sulle registrazioni rumorose.
+CLEAN_FILTERS = "highpass=f=70,afftdn=nr=10:nf=-45:tn=1"
 MIN_REFERENCE_SECONDS = 5
 MAX_SAMPLE_BYTES = 30 * 1024 * 1024
 QUANTIZE = os.environ.get("SGUARDO_INT8", "1") == "1"
@@ -263,28 +272,33 @@ def quantize_gpt(model):
 
 
 def build_references(samples, out_dir):
-    """Converte ogni vocale (anche .opus di WhatsApp o le registrazioni del browser) in un file
-    WAV ripulito: senza silenzi lunghi, volume uniforme, al massimo MAX_SECONDS_PER_SAMPLE.
+    """Converte ogni file audio (vocali, registrazioni del browser, vecchie registrazioni) in file
+    WAV ripuliti: rumore di fondo attenuato, senza silenzi lunghi, volume uniforme. Ogni file dà
+    uno o più pezzi da SEGMENT_SECONDS, fino a MAX_SECONDS_PER_SAMPLE di parlato.
     Restituisce i file ottenuti e la durata totale del parlato."""
     shutil.rmtree(out_dir, ignore_errors=True)
     out_dir.mkdir(parents=True)
     references, total = [], 0.0
     for i, path in enumerate(samples):
-        out = out_dir / f"{i:03d}.wav"
         subprocess.run(
             ["ffmpeg", "-v", "error", "-y", "-i", str(path),
-             "-af", "silenceremove=start_periods=1:start_threshold=-40dB:"
+             "-af", f"{CLEAN_FILTERS},"
+                    "silenceremove=start_periods=1:start_threshold=-40dB:"
                     "stop_periods=-1:stop_duration=0.4:stop_threshold=-40dB,loudnorm",
-             "-ar", str(SAMPLE_RATE), "-ac", "1", "-t", str(MAX_SECONDS_PER_SAMPLE), str(out)],
+             "-ar", str(SAMPLE_RATE), "-ac", "1", "-t", str(MAX_SECONDS_PER_SAMPLE),
+             "-f", "segment", "-segment_time", str(SEGMENT_SECONDS), str(out_dir / f"{i:03d}-%02d.wav")],
             check=True, capture_output=True,
         )
-        with wave.open(str(out), "rb") as w:
-            seconds = w.getnframes() / w.getframerate()
-        if seconds >= 1:  # file vuoti o solo silenzio non servono
-            references.append(out)
-            total += seconds
-        else:
-            out.unlink()
+        pieces = sorted(out_dir.glob(f"{i:03d}-*.wav"))
+        for n, out in enumerate(pieces):
+            with wave.open(str(out), "rb") as w:
+                seconds = w.getnframes() / w.getframerate()
+            # File vuoti o solo silenzio non servono; nemmeno la coda corta di un file lungo.
+            if seconds >= (MIN_SEGMENT_SECONDS if n else 1):
+                references.append(out)
+                total += seconds
+            else:
+                out.unlink()
     return references, total
 
 

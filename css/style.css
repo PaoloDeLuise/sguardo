@@ -94,6 +94,11 @@ button.big.secondary { background: var(--cell); color: var(--text); }
 .source-link { margin: 0; font-size: 0.85rem; color: var(--muted); }
 .source-link a { color: var(--muted); }
 .status.error { color: var(--bad); }
+/* Privacy e avvertenze, nella schermata iniziale: chiusa finché non la si apre */
+.notice { width: min(100%, 36rem); text-align: left; font-size: 0.9rem; color: var(--muted); }
+.notice summary { cursor: pointer; text-align: center; }
+.notice ul { margin: 8px 0 0; padding-left: 1.2rem; line-height: 1.5; }
+.notice li + li { margin-top: 4px; }
 /* Voce clonata, nella schermata iniziale */
 .voice-card {
   width: min(100%, 36rem);
@@ -129,6 +134,38 @@ button.big.secondary { background: var(--cell); color: var(--text); }
 button:disabled { opacity: 0.5; cursor: default; }
 .last-spoken.pending::after { content: " …"; color: var(--muted); }
 #start { overflow-y: auto; }
+
+/* Frasi scritte da chi assiste e copia di sicurezza, nella schermata iniziale */
+.phrase-list { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.phrase-list li { display: flex; gap: 6px; align-items: center; }
+.phrase-list li span { flex: 1; min-width: 0; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+.phrase-list li.none { color: var(--muted); font-size: 0.9rem; }
+.phrase-list button { flex: none; padding: 2px 9px; }
+.backup-hint { margin: 16px 0 0; }
+
+/* Pausa: schermo quieto, niente da selezionare */
+#pause { cursor: pointer; }
+#pause h2 { font-size: 2rem; margin: 0; color: var(--muted); }
+
+/* Chiamata d'aiuto */
+#alarm { position: fixed; inset: 0; z-index: 13; display: flex; flex-direction: column; background: var(--bad); color: #fff; animation: alarm 1s steps(1) infinite; }
+#alarm .prompt-info p { color: #fff; }
+@keyframes alarm { 50% { background: #7f1d1d; } }
+
+/* Fotocamera scollegata: resta finché non torna */
+.cam-lost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 45;
+  padding: 14px 16px;
+  background: var(--bad);
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-align: center;
+}
 
 .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 /* Risultato e avviso: testo in alto, celle grandi da fissare in basso */

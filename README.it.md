@@ -28,6 +28,15 @@ pagina web statica: funziona con qualunque server di file, per esempio GitHub Pa
 caso usa la voce del browser. Python serve solo per avviarla sul proprio PC con `serve.py` e per
 la voce clonata.
 
+**Senza servizi esterni, e senza internet dopo la prima apertura.** MediaPipe e il modello del
+viso stanno nel repository (`vendor/`, circa 23 MB): la pagina li riceve dallo stesso sito che la
+serve e non contatta nessun altro server. Con `serve.py` sul proprio PC internet non serve mai.
+Dal sito pubblicato serve la prima volta; poi il browser conserva tutto e Sguardo parte anche
+senza connessione (con internet si usa sempre la versione più recente, senza l'ultima aperta).
+Restano legate alla rete solo le parole di una lingua mai usata prima su quel dispositivo e, dal
+telefono con `serve.py --https`, il collegamento al PC (con il certificato autofirmato il browser
+non conserva la pagina).
+
 ## Installazione
 
 ```
@@ -75,7 +84,10 @@ e apri **http://localhost:8000**. Su macOS e Linux il comando può essere `pytho
    3. premi **Clona la voce**, poi prova una frase con **Ascolta**.
 
    Più vocali puliti rendono il timbro più stabile (fino a circa 30 secondi migliora anche
-   l'intonazione). I campioni si sommano: **Elimina voce** riparte da zero.
+   l'intonazione). I campioni si sommano: **Elimina voce** riparte da zero. Va bene qualunque
+   file audio, non solo i vocali: di ognuno si usano fino a 2 minuti di parlato, dopo una pulizia
+   leggera (rumori bassi e fruscio di fondo attenuati, silenzi tolti, volume uniforme). Musica e
+   altre voci non si tolgono: meglio scegliere file in cui parla solo la persona.
 
 Da quel momento `serve.py` va avviato sempre con il Python di `.venv-voce`.
 
@@ -133,11 +145,23 @@ con gli occhi.
    - **Cancella** toglie una lettera; continuando a guardarla toglie una parola intera ogni 1,5 s.
    - Numeri e punteggiatura: gruppo **Z J K W X Y / . , ? 123**, poi **123**.
 3. **Frasi.** Dieci frasi per i bisogni (Sì, No, Aiuto, Acqua, Dolore...). In **Le mie frasi** si
-   salva l'ultima frase detta (**Salva**) e si tolgono quelle non più utili.
-4. **Menu: occhi chiusi per 2 secondi.** Ricalibrare, tempo di fissazione, punto visibile,
-   **scrittura continua**: le lettere arrivano dall'alto, affiancate e grandi quanto sono probabili;
+   salva l'ultima frase detta (**Salva**) e si tolgono quelle non più utili. Chi assiste può
+   prepararle con la tastiera nella schermata iniziale (**Frasi e dati della persona**):
+   aggiungerle, riordinarle, toglierle.
+   - **Aiuto con allarme:** fissando **Aiuto** si dice la frase; continuando a guardare la cella
+     per altri 2 secondi parte un allarme forte, che suona finché qualcuno lo ferma (la persona
+     fissando **Ferma l'allarme**, chi assiste toccandola o con `Esc`). Il volume è quello del
+     dispositivo: va tenuto alto.
+4. **Menu: occhi chiusi per 2 secondi.** Pausa, ricalibrare, controllo, scrittura a mano,
+   **ultime frasi** (le ultime 20 scritte e dette: fissandone una la si ridice, **Svuota** le
+   cancella), **impostazioni** (tempo di fissazione, punto visibile, sfondo, suono alla
+   selezione) e **scrittura continua**: le lettere arrivano dall'alto, affiancate e grandi quanto sono probabili;
    si guarda in alto, verso la lettera voluta, per avanzare e in basso per tornare indietro (e
    cancellare). Dal menu si può passare alla versione verticale (lettere da destra).
+   - **Pausa:** nessuna cella si seleziona, così la persona può guardare la TV o chi le parla
+     senza scrivere lettere a caso. Si riprende chiudendo gli occhi per 2 secondi e riaprendoli
+     (se restano chiusi più di 6 secondi la persona dorme e la pausa resta); chi assiste
+     riprende toccando lo schermo.
 5. **Scrittura a mano** (menu → *Scrittura a mano*, o **Scrivi a mano** nella barra, o il tasto `H`):
    il puntatore disegna una lettera o una parola intera. Pensata per la modalità con la testa, ma
    vale per tutte. Si attiva solo quando la si sceglie: non cambia nulla per chi usa la tastiera.
@@ -237,7 +261,15 @@ le celle candidate; quella in vantaggio è evidenziata.
   grigio se l'occhio si stava muovendo). Il clic destro calibra senza selezionare nulla;
 - tasti: `C` calibrazione completa, `R` rapida, `M` menu, `D` scrittura continua, `H` scrittura a mano, `P` punto,
   `Esc` interrompe la calibrazione;
-- **Nuova persona** cancella le calibrazioni salvate (quando Sguardo passa a un'altra persona);
+- **Nuova persona** cancella calibrazioni, parole imparate, frasi salvate, lettere insegnate e
+  ultime frasi (quando Sguardo passa a un'altra persona);
+- **Pausa** nella barra sospende le selezioni;
+- con più fotocamere (portatile e webcam USB) la barra mostra la scelta della **fotocamera**: ogni
+  fotocamera scelta a mano ha le sue calibrazioni. Se la fotocamera si scollega o si ferma compare
+  un avviso rosso con un suono, e Sguardo riprova da solo finché torna;
+- **Esporta dati / Importa dati** (schermata iniziale): una copia di tutto ciò che Sguardo tiene
+  nel browser, in un file che resta sul dispositivo. Serve per cambiare browser o PC (le
+  calibrazioni valgono solo per lo stesso schermo e la stessa fotocamera);
 - `http://localhost:8000/?mouse`: il mouse fa le veci dello sguardo, per provare senza fotocamera.
 
 ### Tempi della voce clonata
@@ -255,14 +287,23 @@ lenti i tempi crescono in proporzione. Per non far aspettare la persona:
 
 - **Video:** elaborato solo nel browser; non viene salvato né inviato.
 - **Dati salvati nel browser** (`localStorage`): calibrazioni, impostazioni, parole e frasi della
-  persona. **Nuova persona** cancella le calibrazioni; i dati del sito si cancellano dalle
-  impostazioni del browser.
+  persona, la frase in corso e le ultime 20 frasi dette. Non lasciano mai il dispositivo.
+  **Nuova persona** cancella tutto tranne le impostazioni; i dati del sito si cancellano anche
+  dalle impostazioni del browser. Il file di **Esporta dati** contiene gli stessi dati: va
+  trattato come un dato personale.
 - **Dati salvati sul PC** (solo con `serve.py`): `voce/` (vocali, voce clonata, frasi generate;
   quelle scritte restano solo le ultime 100) e `recordings/` (calibrazioni salvate con **Salva dati**,
   contengono i punti del viso). Entrambe le cartelle sono escluse dal repository e `serve.py` non
   le serve mai.
-- **Connessioni esterne:** solo per scaricare MediaPipe (jsDelivr), il modello del viso (Google) e,
-  una volta, il modello della voce. La pagina ha una Content Security Policy che non permette altro.
+- **Connessioni esterne:** nessuna dalla pagina, che riceve tutti i suoi file (MediaPipe e
+  modello del viso compresi) dal sito da cui è stata aperta; una Content Security Policy le
+  impedisce di contattare altri indirizzi. Solo la voce clonata scarica una volta il suo modello,
+  dal PC. Chi ospita il sito (per esempio GitHub Pages) vede, come ogni server web, l'indirizzo
+  IP di chi lo apre.
+- **Copia per l'uso senza internet** (`sw.js`): contiene solo i file dell'applicazione (pagina,
+  script, elenchi di parole, MediaPipe, modello del viso). Niente della persona: né video, né
+  calibrazioni, né frasi, né le richieste a `serve.py` per la voce. Non invia nulla e si cancella
+  con i dati del sito dalle impostazioni del browser.
 - **`serve.py`:** accetta richieste solo dalla pagina di Sguardo (controllo di `Host` e `Origin` e
   intestazione `X-Sguardo`, contro richieste da altri siti e DNS rebinding). Le operazioni che
   modificano dati (vocali, clonazione, registrazioni) sono permesse solo dal PC stesso. È un server
@@ -274,7 +315,7 @@ lenti i tempi crescono in proporzione. Per non far aspettare la persona:
 | Componente | Licenza |
 |---|---|
 | Codice di Sguardo | [GNU AGPL-3.0](LICENSE) |
-| MediaPipe Face Landmarker (caricato dal browser) | Apache 2.0 |
+| MediaPipe Tasks Vision e modello Face Landmarker (in `vendor/`) | Apache 2.0, vedi `vendor/mediapipe-0.10.14/LICENSE` |
 | `data/parole-it.txt` (da FrequencyWords) | CC BY-SA 4.0, vedi `data/LICENSE-parole-it.txt` |
 | `data/words-en.txt` (da FrequencyWords) | CC BY-SA 4.0, vedi `data/LICENSE-words-en.txt` |
 | `data/words-es.txt` (da FrequencyWords) | CC BY-SA 4.0, vedi `data/LICENSE-words-es.txt` |
@@ -318,6 +359,9 @@ node tools/simulate-dwell.mjs    # selezione delle celle con uno sguardo simulat
 Ogni modifica a `js/features.js`, `js/regression.js` o `js/pool.js` va confrontata su più
 registrazioni, non su una sola: tra una sessione e l'altra cambiano postura e luce.
 
+Le registrazioni contengono i punti del viso di chi le ha fatte: **non vanno allegate alle Issue**,
+che sono pubbliche.
+
 | File | Cosa fa |
 |---|---|
 | `index.html`, `css/style.css` | Pagina e stile |
@@ -339,7 +383,10 @@ registrazioni, non su una sola: tra una sessione e l'altra cambiano postura e lu
 | `js/draw.js` | Scrittura a mano: area di disegno, penna (si abbassa con un gesto o una cella, si alza col gesto o stando fermi), fine disegno |
 | `js/gestures.js` | Gesti che abbassano la penna: occhiolino e bocca aperta, con livello e soglia |
 | `js/recognizer.js` | Lettere disegnate ($P), separazione in lettere, parole dal dizionario, lettere imparate |
+| `js/sound.js` | Suoni generati dal browser: clic alla selezione, avviso, allarme della chiamata d'aiuto |
 | `js/voice.js` | Voce clonata nella pagina (richieste a `serve.py`, memoria delle frasi) |
+| `vendor/` | MediaPipe 0.10.14 e modello del viso, copiati senza modifiche (come aggiornarli: `vendor/mediapipe-0.10.14/README.md`) |
+| `sw.js` | Service worker: conserva pagina, MediaPipe e modello del viso per l'uso senza internet |
 | `serve.py` | Server locale: file, voce, registrazioni; `--https` per il telefono |
 | `voice.py` | Clonazione e generazione della voce con XTTS-v2 |
 | `data/parole-it.txt` | 30.000 parole italiane per frequenza |
@@ -392,7 +439,6 @@ una persona madrelingua prima di fidarsene: lì un errore non è solo un refuso.
 - Suggerimento della parola successiva anche senza storico personale (oggi a metà frase propone
   solo parole frequenti).
 - Una voce più veloce per i PC lenti (la voce clonata usa XTTS-v2, licenza non commerciale).
-- Possibilità di usare Sguardo senza connessione a internet (MediaPipe e modello del viso in locale).
 
 Segnalazioni e proposte sono benvenute nelle
 [Issue del repository](https://github.com/PaoloDeLuise/sguardo/issues), soprattutto da chi usa

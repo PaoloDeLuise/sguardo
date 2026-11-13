@@ -12,6 +12,9 @@ const BACK_INDEX = COLS * ROWS - 1; // "Indietro" sempre nell'angolo in basso a 
 const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "!"];
 const MORE_INDEX = 10;
 
+// Aiuto: la frase; continuando a guardare la cella per altri 2 s parte l'allarme.
+const ALARM_HOLD = { key: "aiuto", repeatMs: 2000 };
+
 // Cancella: una lettera; continuando a guardare, una parola intera ogni 1,5 s.
 const DELETE_HOLD = { key: "cancella", repeatMs: 1500 };
 
@@ -30,13 +33,15 @@ export const defaultPhrases = () => [...quickPhrases(), ...morePhrases()];
 export class Keyboard {
   // onChange(text) a ogni modifica del testo; onSpeak(text) per leggere ad alta voce.
   // phrases: { load(), save(list) } per le frasi salvate; onPhraseSaved(text) per prepararne la voce.
-  constructor(board, predictor, { onChange, onSpeak, phrases, onPhraseSaved }) {
+  constructor(board, predictor, { onChange, onSpeak, phrases, onPhraseSaved, onSentence, onAlarm }) {
     this.board = board;
     this.predictor = predictor;
     this.onChange = onChange;
     this.onSpeak = onSpeak;
     this.phrasesStore = phrases;
     this.onPhraseSaved = onPhraseSaved;
+    this.onSentence = onSentence; // una frase scritta e detta (per lo storico)
+    this.onAlarm = onAlarm;       // chiamata d'aiuto con allarme
     this.custom = phrases?.load() ?? [];
     this.lastSentence = null; // ultima frase scritta e letta: si può salvare tra le frasi
     this.text = "";
@@ -83,7 +88,10 @@ export class Keyboard {
   }
 
   showPhrases() {
-    const items = quickPhrases().map((p) => ({ label: p.label, kind: "phrase", action: () => this.onSpeak(p.say) }));
+    const items = quickPhrases().map((p) => (p.alarm && this.onAlarm
+      ? { label: p.label, hint: t("alarm.hint"), kind: "phrase", hold: ALARM_HOLD,
+          action: (count = 1) => (count <= 1 ? this.onSpeak(p.say) : this.onAlarm()) }
+      : { label: p.label, kind: "phrase", action: () => this.onSpeak(p.say) }));
     items[NEXT_INDEX] = { label: t("kb.myPhrases"), kind: "cmd", action: () => this.showMyPhrases(0) };
     items[BACK_INDEX] = { label: t("kb.keyboard"), kind: "cmd", action: () => this.showMain() };
     this.board.setLayout(COLS, ROWS, items);
@@ -164,13 +172,14 @@ export class Keyboard {
     if (!sentence) return;
     this.onSpeak(sentence);
     this.predictor.learn(sentence);
+    this.onSentence?.(sentence);
     this.lastSentence = sentence;
     this.text = "";
     this.showMain();
   }
 }
 
-function short(text, max = 40) {
+export function short(text, max = 40) {
   return text.length > max ? text.slice(0, max - 1) + "…" : text;
 }
 

@@ -46,6 +46,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         ".mjs": "text/javascript",
         ".css": "text/css",
         ".html": "text/html",
+        ".wasm": "application/wasm",  # MediaPipe (vendor/): il browser lo compila mentre lo scarica
     }
 
     def end_headers(self):

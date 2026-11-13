@@ -2,10 +2,12 @@
 // caratteristiche dello sguardo (posizione dell'iride nell'occhio + posa della testa).
 import { RAW_POINTS, eyeState, gazeFeatures } from "./features.js";
 import { outlineOf } from "./silhouette.js";
-import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+// MediaPipe e il modello del viso stanno nel repository (vendor/, vedi il README lì dentro): la
+// pagina li riceve dal sito da cui è stata aperta e non contatta nessun altro server.
+import { FaceLandmarker, FilesetResolver } from "../vendor/mediapipe-0.10.14/vision_bundle.mjs";
 
-const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
-const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const WASM_URL = new URL("../vendor/mediapipe-0.10.14/wasm", import.meta.url).href;
+const MODEL_URL = new URL("../vendor/mediapipe-0.10.14/face_landmarker.task", import.meta.url).href;
 
 const round = (v, k = 100) => Math.round(v * k) / k;
 
@@ -14,6 +16,9 @@ export class GazeTracker {
     this.video = video;
     this.landmarker = null;
     this.onFrame = () => {};
+    this.onLost = () => {};       // la fotocamera si è scollegata
+    this.cameraId = null;         // fotocamera scelta (null: quella predefinita)
+    this.actualCameraId = null;   // fotocamera in uso davvero
     this.lastVideoTime = -1;
     this.running = false;
     this.mode = "eyes"; // modalità di controllo: quali caratteristiche produce (vedi features.js)
@@ -35,16 +40,30 @@ export class GazeTracker {
     }
   }
 
-  async startCamera() {
+  // deviceId: la fotocamera scelta da chi assiste; senza, quella frontale o predefinita.
+  async startCamera(deviceId = null) {
     // Sui telefoni (schermo touch) basta 640x480: a 30–40 cm il viso riempie l'inquadratura e
     // il telefono elabora più fotogrammi al secondo, quindi lo sguardo stimato trema meno.
     const phone = matchMedia("(pointer: coarse)").matches;
+    const size = { width: { ideal: phone ? 640 : 1280 }, height: { ideal: phone ? 480 : 720 } };
+    // Prima si chiude quella in uso: su molti telefoni non se ne aprono due insieme.
+    this.stopCamera();
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: phone ? 640 : 1280 }, height: { ideal: phone ? 480 : 720 } },
+      video: deviceId ? { deviceId: { exact: deviceId }, ...size } : { facingMode: "user", ...size },
       audio: false,
     });
     this.video.srcObject = stream;
+    this.cameraId = deviceId;
+    const [track] = stream.getVideoTracks();
+    this.actualCameraId = track?.getSettings?.().deviceId ?? null; // anche quando ha scelto il browser
+    // "ended" arriva quando la fotocamera sparisce (cavo staccato), non quando la chiudiamo noi.
+    track?.addEventListener("ended", () => { if (this.video.srcObject === stream) this.onLost(); });
     await this.video.play();
+  }
+
+  stopCamera() {
+    for (const track of this.video.srcObject?.getTracks?.() ?? []) track.stop();
+    this.video.srcObject = null;
   }
 
   start() {

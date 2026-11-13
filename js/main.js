@@ -3,7 +3,7 @@ import { predict } from "./regression.js";
 import { OneEuro } from "./filter.js";
 import { Aborted, CALIB_POINTS, Calibrator, QUICK_POINTS, VALIDATION_POINTS, cleanSamples } from "./calibration.js";
 import { DwellBoard } from "./board.js";
-import { Keyboard, defaultPhrases, display } from "./keyboard.js";
+import { Keyboard, defaultPhrases, display, short } from "./keyboard.js";
 import { LOCALES, detectLanguage, locale, setLanguage, t, translatePage } from "./i18n.js";
 import { API_HEADERS, ClonedVoice, voiceLanguage } from "./voice.js";
 import { Dasher, LetterModel } from "./dasher.js";
@@ -15,6 +15,7 @@ import { CalibrationPool } from "./pool.js";
 import { PostureMonitor, meanPose, poseOffset } from "./posture.js";
 import { OutlineAverage, drawOutlines, outlineHints } from "./silhouette.js";
 import { CLEAN_INDICES, CONTROL_MODES, STABILITY } from "./features.js";
+import { Alarm, click, unlock, warning } from "./sound.js";
 
 const $ = (s) => document.querySelector(s);
 const POOL_KEY = "sguardo.calibrazioni.v1";
@@ -22,8 +23,14 @@ const SETTINGS_KEY = "sguardo.settings.v1";
 const LEXICON_KEY = "sguardo.lessico.v1";
 const PHRASES_KEY = "sguardo.frasi.v1";
 const DRAW_KEY = "sguardo.scrittura-a-mano.v1";
+const HISTORY_KEY = "sguardo.storico.v1"; // ultime frasi scritte e dette
+const TEXT_KEY = "sguardo.testo.v1";      // frase in corso: sopravvive a un ricaricamento
+// Ciò che appartiene alla persona e non al dispositivo: "Nuova persona" lo cancella tutto.
+const PERSON_KEYS = [POOL_KEY, LEXICON_KEY, PHRASES_KEY, DRAW_KEY, HISTORY_KEY, TEXT_KEY];
+const HISTORY_MAX = 20;
 
 const MENU_EYES_CLOSED_MS = 2000;     // occhi chiusi per aprire il menu
+const PAUSE_MAX_CLOSED_MS = 6000;     // in pausa, occhi chiusi più a lungo = sonno: la pausa resta
 const RECAL_MIN_INTERVAL_MS = 60_000; // non riproporre la ricalibrazione troppo spesso
 const SNOOZE_MS = 180_000;            // dopo "Non ora"
 const PROMPT_SECONDS = 5;             // conto alla rovescia prima della ricalibrazione rapida
@@ -37,17 +44,23 @@ const RESULT_GRACE_MS = 3000;         // all'apertura del risultato le celle non
 // ?mouse nell'indirizzo: il mouse fa le veci dello sguardo (per provare la tastiera senza calibrare).
 const MOUSE_MODE = new URLSearchParams(location.search).has("mouse");
 
-const screens = { start: $("#start"), board: $("#board"), dasher: $("#dasher"), draw: $("#draw"), calib: $("#calib"), result: $("#result"), prompt: $("#prompt") };
+const screens = { start: $("#start"), board: $("#board"), dasher: $("#dasher"), draw: $("#draw"), calib: $("#calib"), result: $("#result"), prompt: $("#prompt"), pause: $("#pause"), alarm: $("#alarm") };
 const video = $("#video");
 const dot = $("#gaze-dot");
 
 const tracker = new GazeTracker(video);
 const calibrator = new Calibrator($("#calib"), $("#calib-target"), $("#calib-msg"));
-const select = (item, count) => item.action(count);
+// Una cella scelta: un clic leggero (si spegne dal menu) e la sua azione.
+const select = (item, count) => {
+  if (settings.sound) click();
+  item.action(count);
+};
 const board = new DwellBoard($("#board"), select);
 const resultBoard = new DwellBoard($("#result-cells"), select);
 const promptBoard = new DwellBoard($("#prompt-cells"), select);
 const drawBoard = new DwellBoard($("#draw-cells"), select);
+const alarmBoard = new DwellBoard($("#alarm-cells"), select);
+const alarm = new Alarm();
 const posture = new PostureMonitor();
 const voice = new ClonedVoice();
 const filterX = new OneEuro();
@@ -56,7 +69,7 @@ const filterY = new OneEuro();
 // dasherLayout: "auto" mette le lettere sul lato lungo dello schermo (orizzontale su PC e telefono
 // girato, verticale su telefono in verticale): nel simulatore (tools/simulate-dasher.mjs) lettere
 // più grandi danno il 92% di frasi completate contro il 62%, con il 75% di cancellazioni in meno.
-const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", background: "auto", control: "eyes", drawGapMs: 2000, penStillMs: 700, penMode: "wink", penDelayMs: 800, penSens: 1, ...load(SETTINGS_KEY) };
+const settings = { dwellMs: 1000, showDot: true, dasherSpeed: 1, dasherLayout: "auto", background: "auto", control: "eyes", drawGapMs: 2000, penStillMs: 700, penMode: "wink", penDelayMs: 800, penSens: 1, sound: true, ...load(SETTINGS_KEY) };
 if (!CONTROL_MODES.includes(settings.control)) settings.control = "eyes";
 if (!PEN_MODES.includes(settings.penMode)) settings.penMode = "wink";
 
@@ -68,6 +81,7 @@ setLanguage(lang);
 translatePage();
 Object.assign(voiceLanguage, { xtts: locale().xtts, ui: lang }); // la voce clonata parla nella lingua scelta
 const perLanguage = (key) => (lang === "it" ? key : `${key}:${lang}`);
+let spoken = load(perLanguage(HISTORY_KEY)) ?? []; // ultime frasi dette, la più recente per prima
 for (const select of document.querySelectorAll("select.lang-select")) {
   select.replaceChildren(...Object.values(LOCALES).map((l) => new Option(l.name, l.code)));
   select.value = lang;
@@ -133,6 +147,7 @@ let centerOffset = [0, 0];
 // ---------- ciclo per fotogramma ----------
 
 tracker.onFrame = (f) => {
+  lastFrameAt = f.t;
   updateFaceStatus(f);
   updateSilhouette(f);
   recent.push(f.face && !f.blink ? f.features : null);
@@ -170,10 +185,11 @@ tracker.onFrame = (f) => {
     watchEyesClosed(f);
     watchPosture(f);
   }
+  if (mode === "pause") watchPause(f);
 };
 
 function activeBoard() {
-  return { board, result: resultBoard, prompt: promptBoard, draw: drawBoard }[mode] ?? null;
+  return { board, result: resultBoard, prompt: promptBoard, draw: drawBoard, alarm: alarmBoard }[mode] ?? null;
 }
 
 // Fotogrammi al secondo elaborati: su un telefono possono essere pochi, e con pochi
@@ -267,6 +283,157 @@ function watchEyesClosed(f) {
   }
 }
 
+// ---------- pausa ----------
+
+// In pausa non si seleziona niente: la persona può guardare la TV o chi le parla senza scrivere
+// lettere a caso. Si riprende chiudendo gli occhi per 2 secondi e riaprendoli; se restano chiusi
+// più a lungo la persona dorme e la pausa resta. Chi assiste riprende toccando lo schermo.
+let pauseClosedSince = null;
+
+function pause() {
+  if (!keyboard) return;
+  pauseClosedSince = null;
+  show("pause");
+}
+
+function resume() {
+  if (mode !== "pause") return;
+  menuOpenedByEyes = true; // se gli occhi sono ancora chiusi non si apre subito il menu
+  keyboard.showMain();
+  show("board");
+  toast(t("pause.resumed"), 1500);
+}
+
+function watchPause(f) {
+  if (f.face && f.blink) {
+    pauseClosedSince ??= f.t;
+    return;
+  }
+  const closed = pauseClosedSince === null ? 0 : f.t - pauseClosedSince;
+  pauseClosedSince = null;
+  if (f.face && closed >= MENU_EYES_CLOSED_MS && closed <= PAUSE_MAX_CLOSED_MS) resume();
+}
+
+$("#pause").addEventListener("click", resume);
+$("#btn-pause").addEventListener("click", () => { if (["board", "dasher", "draw"].includes(mode)) pause(); });
+
+// ---------- chiamata d'aiuto ----------
+
+// "Aiuto" dice la frase; continuando a guardare la cella parte l'allarme (keyboard.js), che suona
+// finché qualcuno lo ferma: la persona fissando la cella, chi assiste toccandola (o con Esc).
+function startAlarm() {
+  board.holding = null; // tornando alle frasi non deve ripartire da solo
+  try { speechSynthesis.cancel(); } catch { /* sintesi non disponibile */ }
+  show("alarm");
+  alarmBoard.setLayout(3, 1, [null, { label: t("alarm.stop"), kind: "cmd", action: stopAlarm }, null]);
+  alarmBoard.cooldownUntil = performance.now() + 1500; // lo sguardo è ancora dov'era
+  alarm.start();
+}
+
+function stopAlarm() {
+  alarm.stop();
+  keyboard.showPhrases();
+  show("board");
+}
+
+// ---------- fotocamera: scelta e scollegamento ----------
+
+// Senza fotogrammi per qualche secondo (cavo staccato, fotocamera presa da un altro programma)
+// lo sguardo si ferma: lo si dice a chi assiste, con un avviso e un suono, e si riprova da soli.
+const CAMERA_STALL_MS = 4000;
+const CAMERA_RETRY_MS = 2000;
+let lastFrameAt = Infinity; // nessun controllo finché la fotocamera non è partita
+let cameraLost = false;
+
+// Avvia la fotocamera scelta; se non c'è più (webcam USB non collegata) quella predefinita.
+async function startCamera() {
+  try {
+    await tracker.startCamera(settings.cameraId ?? null);
+  } catch (e) {
+    if (!settings.cameraId || !["OverconstrainedError", "NotFoundError"].includes(e.name)) throw e;
+    await tracker.startCamera();
+  }
+  lastFrameAt = performance.now() + 10_000; // il primo fotogramma può farsi aspettare
+  listCameras();
+}
+
+// Con più fotocamere (portatile + webcam USB) chi assiste sceglie quale usare, dalla barra.
+async function listCameras() {
+  const select = $("#camera-select");
+  try {
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput" && d.deviceId);
+    select.hidden = cams.length < 2;
+    select.replaceChildren(
+      new Option(t("camera.auto"), ""),
+      ...cams.map((d, i) => new Option(d.label || t("camera.n", { n: i + 1 }), d.deviceId)),
+    );
+    select.value = tracker.cameraId ?? "";
+  } catch {
+    select.hidden = true;
+  }
+}
+
+$("#camera-select").addEventListener("change", async () => {
+  const next = $("#camera-select").value;
+  if (!pool || next === (tracker.cameraId ?? "")) return;
+  const before = settings.cameraId;
+  if (next) settings.cameraId = next;
+  else delete settings.cameraId;
+  try {
+    await tracker.startCamera(next || null);
+  } catch {
+    if (before) settings.cameraId = before;
+    else delete settings.cameraId;
+    toast(t("camera.failed"), 5000);
+    await startCamera().catch(() => cameraIsLost());
+    return;
+  }
+  save(SETTINGS_KEY, settings);
+  lastFrameAt = performance.now() + 10_000;
+  listCameras();
+  recent.length = recentPoses.length = rawPreds.length = 0;
+  gaze = null;
+  openPool(); // ogni fotocamera ha le sue calibrazioni: inquadra il viso da un altro punto
+  toast(t("camera.changed"), 4000);
+  calibrate(model ? "quick" : "full");
+});
+
+function cameraIsLost() {
+  if (cameraLost) return;
+  cameraLost = true;
+  $("#cam-lost").hidden = false;
+  warning();
+  gaze = null;
+  filterX.reset();
+  filterY.reset();
+  renderDot();
+  const retry = async () => {
+    try {
+      await tracker.startCamera(tracker.cameraId);
+    } catch {
+      setTimeout(retry, CAMERA_RETRY_MS);
+      return;
+    }
+    cameraLost = false;
+    lastFrameAt = performance.now() + 10_000;
+    $("#cam-lost").hidden = true;
+    toast(t("camera.back"));
+    listCameras();
+  };
+  setTimeout(retry, CAMERA_RETRY_MS);
+}
+
+tracker.onLost = cameraIsLost;
+setInterval(() => {
+  // Con la pagina nascosta il browser ferma il ciclo dei fotogrammi: non è un guasto.
+  if (document.visibilityState !== "visible") {
+    if (Number.isFinite(lastFrameAt)) lastFrameAt = performance.now();
+    return;
+  }
+  if (tracker.running && performance.now() - lastFrameAt > CAMERA_STALL_MS) cameraIsLost();
+}, 1000);
+navigator.mediaDevices?.addEventListener?.("devicechange", () => { if (tracker.running) listCameras(); });
+
 // Scrittura a mano con un gesto (occhiolino, bocca aperta, inclinazione): tenuto per il tempo del
 // gesto, abbassa o alza la penna, una volta sola per gesto. Mostra anche il livello nella barra.
 function watchGesture(f) {
@@ -331,12 +498,18 @@ function baseDevice() {
   return `${screen.width}x${screen.height}@${video.videoWidth}x${video.videoHeight}`;
 }
 
+// Una fotocamera scelta a mano ha il suo archivio (inquadra il viso da un altro punto); con
+// quella predefinita la chiave resta quella di sempre.
+function cameraKey() {
+  return tracker.cameraId ? `|cam:${tracker.cameraId.slice(0, 12)}` : "";
+}
+
 // L'archivio delle calibrazioni dipende da dispositivo, orientamento e modalità di controllo
 // (le caratteristiche dei campioni sono diverse). Per gli occhi la chiave è quella delle versioni
 // precedenti, così le calibrazioni già fatte restano valide.
 function deviceKey() {
   const base = `${baseDevice()}|${orientation()}`;
-  return settings.control === "eyes" ? base : `${base}|${settings.control}`;
+  return (settings.control === "eyes" ? base : `${base}|${settings.control}`) + cameraKey();
 }
 
 function openPool() {
@@ -345,7 +518,7 @@ function openPool() {
   // Archivi delle versioni precedenti (senza orientamento: un solo archivio sotto POOL_KEY, poi
   // uno per dimensioni di schermo e video): valgono per gli occhi in orizzontale, quello del PC.
   const previous = () => {
-    if (orientation() !== "orizzontale" || settings.control !== "eyes") return undefined;
+    if (orientation() !== "orizzontale" || settings.control !== "eyes" || tracker.cameraId) return undefined;
     const legacy = load(POOL_KEY);
     const old = load(`${POOL_KEY}:${baseDevice()}`) ?? (legacy?.device === baseDevice() ? legacy : undefined);
     return old ? { ...old, device } : undefined;
@@ -442,14 +615,15 @@ function checkWindowShape() {
 function show(name) {
   if (mode === "dasher" && name !== "dasher") dasher?.stop();
   if (mode === "draw" && name !== "draw") drawPad?.stop();
+  if (name !== "alarm") alarm.stop(); // qualunque altra schermata lo ferma
   mode = name;
   themeColors = null;
   stopCountdown();
   for (const [k, el] of Object.entries(screens)) el.hidden = k !== name;
   $("#compose").hidden = !["board", "dasher", "draw"].includes(name);
   // Nella scrittura continua e a mano la barra in alto si nasconde: più spazio per le lettere.
-  $("#toolbar").hidden = ["start", "calib", "prompt", "dasher", "draw"].includes(name);
-  for (const b of [board, resultBoard, promptBoard, drawBoard]) { b.reset(); b.fit(); }
+  $("#toolbar").hidden = ["start", "calib", "prompt", "dasher", "draw", "pause", "alarm"].includes(name);
+  for (const b of [board, resultBoard, promptBoard, drawBoard, alarmBoard]) { b.reset(); b.fit(); }
   gestures.reset();
   if (name !== "draw") dot.classList.remove("pen");
   renderDot();
@@ -486,6 +660,7 @@ function toast(text, ms = 3000) {
 $("#btn-start").addEventListener("click", async () => {
   const status = $("#start-status");
   status.classList.remove("error");
+  unlock(); // i suoni (clic, allarme) si possono avviare solo da un gesto come questo
   document.documentElement.requestFullscreen?.().catch(() => {});
   try {
     if (!window.isSecureContext) {
@@ -501,7 +676,7 @@ $("#btn-start").addEventListener("click", async () => {
     status.textContent = t("start.loadingModel");
     await tracker.load();
     status.textContent = t("start.startingCamera");
-    await tracker.startCamera();
+    await startCamera();
     tracker.start();
     keepScreenOn();
 
@@ -535,29 +710,47 @@ async function setupKeyboard() {
     onChange: (text) => {
       $("#compose-text").textContent = display(text);
       $("#compose").scrollLeft = $("#compose").scrollWidth; // se il testo è lungo resta visibile la fine
+      save(perLanguage(TEXT_KEY), text); // un ricaricamento non fa perdere la frase in corso
       schedulePregeneration(text);
     },
     onSpeak: speak,
     phrases: { load: () => load(perLanguage(PHRASES_KEY)), save: (list) => save(perLanguage(PHRASES_KEY), list) },
-    onPhraseSaved: (text) => voice.ready && voice.prefetch([text]),
+    onPhraseSaved: (text) => { renderPhraseEditor(); if (voice.ready) voice.prefetch([text]); },
+    onSentence: remember,
+    onAlarm: startAlarm,
   });
+  const unfinished = load(perLanguage(TEXT_KEY));
+  if (typeof unfinished === "string") keyboard.text = unfinished;
   keyboard.showMain();
 }
 
 // Menu usabile con lo sguardo: si apre tenendo gli occhi chiusi per 2 secondi.
 function showMenu() {
   if (mode !== "board") show("board");
-  const seconds = (settings.dwellMs / 1000).toFixed(2).replace(/0$/, "");
   const items = [
+    { label: t("menu.pause"), kind: "cmd", action: pause },
     { label: t("menu.recalibrate"), kind: "cmd", action: () => calibrate("quick") },
     { label: t("menu.fullCalibration"), kind: "cmd", action: () => calibrate("full") },
-    { label: t("menu.dwellSlower", { s: seconds }), kind: "cmd", action: () => { changeDwell(250); showMenu(); } },
-    { label: t("menu.dwellFaster", { s: seconds }), kind: "cmd", action: () => { changeDwell(-250); showMenu(); } },
     { label: t("menu.control", { c: t(`control.${settings.control}`) }), kind: "cmd", action: showControlMenu },
     // Con gli occhi "Ricentra" non serve: al suo posto la sagoma della posizione di calibrazione.
     settings.control !== "eyes" ? { label: t("menu.recenter"), kind: "cmd", action: recenter }
       : pool?.lastOutline ? { label: t("menu.position"), kind: "cmd", action: showPosition } : null,
-    { label: t("menu.dot", { v: t(settings.showDot ? "yes" : "no") }), kind: "cmd", action: () => { toggleDot(); showMenu(); } },
+    { label: t("menu.dasher"), kind: "cmd", action: startDasher },
+    { label: t("menu.draw"), kind: "cmd", action: showDrawMenu },
+    spoken.length ? { label: t("menu.history"), kind: "cmd", action: () => showHistory(0) } : null,
+    { label: t("menu.settings"), kind: "cmd", action: showSettingsMenu },
+  ];
+  items[11] = { label: t("menu.back"), kind: "cmd", action: () => keyboard.showMain() };
+  board.setLayout(4, 3, items);
+}
+
+// Regolazioni che si toccano di rado: tempo di fissazione, punto, sfondo, suono, scrittura continua.
+function showSettingsMenu() {
+  const seconds = (settings.dwellMs / 1000).toFixed(2).replace(/0$/, "");
+  const items = [
+    { label: t("menu.dwellSlower", { s: seconds }), kind: "cmd", action: () => { changeDwell(250); showSettingsMenu(); } },
+    { label: t("menu.dwellFaster", { s: seconds }), kind: "cmd", action: () => { changeDwell(-250); showSettingsMenu(); } },
+    { label: t("menu.dot", { v: t(settings.showDot ? "yes" : "no") }), kind: "cmd", action: () => { toggleDot(); showSettingsMenu(); } },
     {
       label: t("menu.background", { b: t(`background.${settings.background}`) }),
       kind: "cmd",
@@ -565,16 +758,39 @@ function showMenu() {
         const wasLight = lightBackground();
         settings.background = BACKGROUNDS[(BACKGROUNDS.indexOf(settings.background) + 1) % BACKGROUNDS.length];
         applySettings();
-        showMenu();
+        showSettingsMenu();
         // La luce sul viso è cambiata: la calibrazione fatta con l'altro sfondo vale meno.
         if (lightBackground() !== wasLight && model) toast(t("menu.backgroundChanged"), 5000);
       },
     },
-    { label: t("menu.dasher"), kind: "cmd", action: startDasher },
+    { label: t("menu.sound", { v: t(settings.sound ? "yes" : "no") }), kind: "cmd", action: () => { settings.sound = !settings.sound; applySettings(); showSettingsMenu(); } },
     { label: t("menu.dasherSettings"), kind: "cmd", action: showDasherMenu },
   ];
-  items[10] = { label: t("menu.draw"), kind: "cmd", action: showDrawMenu };
-  items[11] = { label: t("menu.back"), kind: "cmd", action: () => keyboard.showMain() };
+  items[11] = { label: t("menu.backToMenu"), kind: "cmd", action: showMenu };
+  board.setLayout(4, 3, items);
+}
+
+// ---------- ultime frasi ----------
+
+// Le ultime frasi scritte e dette restano nel browser (per lingua), la più recente per prima.
+function remember(sentence) {
+  spoken = [sentence, ...spoken.filter((s) => s !== sentence)].slice(0, HISTORY_MAX);
+  save(perLanguage(HISTORY_KEY), spoken);
+}
+
+// Fissandone una la si ridice; diventa l'ultima frase, quindi "Ripeti" e "Salva" valgono per lei.
+function showHistory(page) {
+  const PER_PAGE = 8;
+  const pages = Math.max(1, Math.ceil(spoken.length / PER_PAGE));
+  page %= pages;
+  const items = spoken.slice(page * PER_PAGE, (page + 1) * PER_PAGE).map((s) => ({
+    label: short(display(s)),
+    kind: "phrase",
+    action: () => { speak(s); keyboard.lastSentence = s; },
+  }));
+  items[9] = { label: t("history.clear"), kind: "cmd remove", action: () => { spoken = []; save(perLanguage(HISTORY_KEY), spoken); showMenu(); } };
+  if (pages > 1) items[10] = { label: t("kb.more"), kind: "cmd", action: () => showHistory(page + 1) };
+  items[11] = { label: t("menu.backToMenu"), kind: "cmd", action: showMenu };
   board.setLayout(4, 3, items);
 }
 
@@ -1299,7 +1515,7 @@ setupVoice();
 // ---------- impostazioni (dalla barra per chi assiste o dal menu con lo sguardo) ----------
 
 function applySettings() {
-  board.dwellMs = resultBoard.dwellMs = promptBoard.dwellMs = settings.dwellMs;
+  board.dwellMs = resultBoard.dwellMs = promptBoard.dwellMs = alarmBoard.dwellMs = settings.dwellMs;
   $("#dwell-value").textContent = `${(settings.dwellMs / 1000).toFixed(2).replace(/0$/, "")} s`;
   $("#btn-dot").textContent = t("bar.dot", { v: t(settings.showDot ? "yes" : "no") });
   tracker.mode = settings.control;
@@ -1336,12 +1552,23 @@ $("#btn-last-result").addEventListener("click", () => {
 });
 $("#btn-reset").addEventListener("click", () => {
   if (!pool || !confirm(t("reset.confirm"))) return;
-  // Tutti gli archivi: uno per orientamento, più quello del formato precedente.
+  // Calibrazioni (un archivio per orientamento, più quello del formato precedente) e tutto ciò che
+  // Sguardo ha imparato dalla persona, in ogni lingua: parole, frasi, lettere disegnate, storico.
   try {
-    for (const k of Object.keys(localStorage)) if (k === POOL_KEY || k.startsWith(`${POOL_KEY}:`)) localStorage.removeItem(k);
+    for (const k of Object.keys(localStorage)) {
+      if (PERSON_KEYS.some((p) => k === p || k.startsWith(`${p}:`))) localStorage.removeItem(k);
+    }
   } catch { /* storage non disponibile */ }
   pool.clear();
   model = null;
+  keyboard.predictor.user = { uni: {}, bi: {} };
+  keyboard.custom = [];
+  keyboard.lastSentence = null;
+  keyboard.text = "";
+  spoken = [];
+  for (const k of Object.keys(drawPersonal)) delete drawPersonal[k];
+  $("#last-spoken").textContent = "";
+  renderPhraseEditor();
   calibrate("full");
 });
 $("#btn-diag").addEventListener("click", showDiagnostics);
@@ -1349,6 +1576,10 @@ $("#btn-download").addEventListener("click", saveSession);
 $("#diag").addEventListener("click", () => ($("#diag").hidden = true));
 
 addEventListener("keydown", (e) => {
+  if (mode === "alarm" || mode === "pause") {
+    if (e.key === "Escape") (mode === "alarm" ? stopAlarm : resume)();
+    return;
+  }
   if (mode === "start" || (MOUSE_MODE && !"mdh".includes(e.key))) return;
   if (e.key === "Escape" && mode === "calib") calibrator.abort();
   else if (mode === "calib") return;
@@ -1362,7 +1593,144 @@ addEventListener("keydown", (e) => {
 
 applySettings();
 
-// La scrittura continua disegna su un canvas: va ridimensionato con la finestra.
+// ---------- frasi scritte da chi assiste ----------
+
+// Nella schermata iniziale chi assiste prepara "Le mie frasi" con la tastiera fisica: aggiunge,
+// riordina, toglie. Sono le stesse che la persona salva con gli occhi, e restano nel browser.
+function customPhrases() {
+  return keyboard ? keyboard.custom : load(perLanguage(PHRASES_KEY)) ?? [];
+}
+
+function setCustomPhrases(list) {
+  save(perLanguage(PHRASES_KEY), list);
+  if (keyboard) keyboard.custom = list;
+  renderPhraseEditor();
+}
+
+function renderPhraseEditor() {
+  const list = customPhrases();
+  const button = (label, title, disabled, action) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.title = title;
+    b.setAttribute("aria-label", title);
+    b.disabled = disabled;
+    b.addEventListener("click", action);
+    return b;
+  };
+  const move = (i, to) => {
+    const next = [...list];
+    [next[i], next[to]] = [next[to], next[i]];
+    setCustomPhrases(next);
+  };
+  const rows = list.map((phrase, i) => {
+    const li = document.createElement("li");
+    const text = document.createElement("span");
+    text.textContent = phrase;
+    li.append(
+      text,
+      button("↑", t("data.up"), i === 0, () => move(i, i - 1)),
+      button("↓", t("data.down"), i === list.length - 1, () => move(i, i + 1)),
+      button("✕", t("data.remove"), false, () => setCustomPhrases(list.filter((_, j) => j !== i))),
+    );
+    return li;
+  });
+  if (!rows.length) {
+    const none = document.createElement("li");
+    none.className = "none";
+    none.textContent = t("data.none");
+    rows.push(none);
+  }
+  $("#phrase-list").replaceChildren(...rows);
+}
+
+function addPhrase() {
+  const input = $("#phrase-new");
+  const text = input.value.trim().replace(/\s+/g, " ");
+  if (!text) return;
+  if (!customPhrases().includes(text)) {
+    setCustomPhrases([...customPhrases(), text]);
+    if (voice.ready) voice.prefetch([text]); // con la voce clonata: pronta prima che serva
+  }
+  input.value = "";
+  input.focus();
+}
+
+$("#btn-phrase-add").addEventListener("click", addPhrase);
+$("#phrase-new").addEventListener("keydown", (e) => { if (e.key === "Enter") addPhrase(); });
+renderPhraseEditor();
+
+// ---------- copia di sicurezza ----------
+
+// Tutto ciò che Sguardo tiene nel browser (calibrazioni, parole, frasi, impostazioni) in un file
+// che resta sul dispositivo: per cambiare PC o browser, o dopo una pulizia dei dati del sito.
+// Le calibrazioni valgono solo per lo stesso schermo e la stessa fotocamera.
+const BACKUP_PREFIX = "sguardo.";
+
+function exportData() {
+  const data = {};
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith(BACKUP_PREFIX)) data[k] = localStorage.getItem(k);
+  } catch { /* storage non disponibile */ }
+  const file = `sguardo-dati-${new Date().toISOString().slice(0, 10)}.json`;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: "sguardo", version: 1, date: new Date().toISOString(), data })], { type: "application/json" }));
+  a.download = file;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  dataStatus(t("data.exported", { file }));
+}
+
+async function importData(file) {
+  let data;
+  try {
+    const backup = JSON.parse(await file.text());
+    if (backup?.app !== "sguardo" || typeof backup.data !== "object" || !backup.data) throw new Error("formato");
+    data = Object.entries(backup.data).filter(([k, v]) => k.startsWith(BACKUP_PREFIX) && typeof v === "string");
+    for (const [, v] of data) JSON.parse(v); // ogni valore deve essere leggibile da load()
+    if (!data.length) throw new Error("vuoto");
+  } catch {
+    dataStatus(t("data.importFailed"), true);
+    return;
+  }
+  if (!confirm(t("data.importConfirm"))) return;
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith(BACKUP_PREFIX)) localStorage.removeItem(k);
+    for (const [k, v] of data) localStorage.setItem(k, v);
+  } catch {
+    dataStatus(t("data.importFailed"), true);
+    return;
+  }
+  location.reload(); // impostazioni, lingua e frasi si rileggono dall'inizio
+}
+
+function dataStatus(text, error = false) {
+  const el = $("#data-status");
+  el.textContent = text;
+  el.classList.toggle("error", error);
+}
+
+$("#btn-export").addEventListener("click", exportData);
+$("#import-file").addEventListener("change", (e) => {
+  const [file] = e.target.files;
+  e.target.value = ""; // lo stesso file si può scegliere di nuovo
+  if (file) importData(file);
+});
+
+// ---------- uso senza internet ----------
+
+// Il service worker (sw.js) conserva i file di Sguardo, MediaPipe e il modello del viso: dopo la
+// prima apertura con internet la pagina parte anche senza rete. Gli si manda l'elenco dei file
+// già caricati, perché alla prima visita sono arrivati prima che lui fosse attivo.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => { /* non disponibile: serve internet come prima */ });
+  navigator.serviceWorker.ready.then((registration) => {
+    const loaded = [location.href, ...performance.getEntriesByType("resource").map((e) => e.name)];
+    registration.active?.postMessage({ cache: loaded });
+  }).catch(() => {});
+}
 
 // ---------- utilità ----------
 

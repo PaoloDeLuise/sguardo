@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0f1115">
-  <!-- Solo gli script di Sguardo e di MediaPipe (jsDelivr); il modello del viso da Google.
-       Nessun dato della fotocamera esce dal dispositivo: non c'è nessun altro indirizzo permesso. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <!-- Solo i file di questo sito (Sguardo e MediaPipe, che sta in vendor/): la pagina non può
+       contattare nessun altro indirizzo. Nessun dato della fotocamera esce dal dispositivo. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <title>Sguardo</title>
   <link rel="stylesheet" href="css/style.css">
@@ -38,6 +38,18 @@
     <button id="btn-start" class="big" data-i18n="start.button">Avvia fotocamera</button>
     <p id="start-status" class="status"></p>
     <p class="source-link" data-i18n-html="start.source"><a href="https://github.com/PaoloDeLuise/sguardo" target="_blank" rel="noopener">Codice sorgente</a> · software libero, licenza AGPL-3.0</p>
+
+    <!-- Nota di trasparenza per chi assiste: cosa resta sul dispositivo e cosa Sguardo non è -->
+    <details class="notice">
+      <summary data-i18n="note.title">Privacy e avvertenze</summary>
+      <ul>
+        <li data-i18n="note.device">Tutto resta su questo dispositivo: il video della fotocamera è elaborato nel browser, non viene salvato né inviato.</li>
+        <li data-i18n="note.storage">Calibrazioni, parole, frasi e impostazioni sono salvate solo in questo browser. Nessun cookie, nessuna statistica, nessun tracciamento. «Nuova persona» cancella i dati della persona; tutto si cancella anche dai dati del sito, nelle impostazioni del browser.</li>
+        <li data-i18n="note.network">La pagina non contatta altri servizi: riceve i suoi file solo dal sito da cui è stata aperta. Solo la voce clonata, se installata sul PC, scarica una volta il suo modello.</li>
+        <li data-i18n="note.voice">La voce di una persona si clona solo con il suo consenso, o di chi la rappresenta.</li>
+        <li data-i18n="note.medical">Sguardo non è un dispositivo medico ed è offerto senza garanzie. L'allarme si sente solo con il dispositivo acceso, il volume alto e qualcuno vicino: non deve essere l'unico modo per chiamare aiuto.</li>
+      </ul>
+    </details>
 
     <!-- Voce clonata: la prepara chi assiste, una volta sola -->
     <div id="voice-setup" class="voice-card" hidden>
@@ -74,6 +86,25 @@
         <button id="btn-voice-reset" class="secondary" data-i18n="voice.reset">Elimina voce</button>
       </div>
     </div>
+
+    <!-- Frasi pronte scritte da chi assiste, copia di sicurezza dei dati. Tutto resta nel browser. -->
+    <div id="person-data" class="voice-card">
+      <h2 data-i18n="data.title">Frasi e dati della persona</h2>
+      <p class="muted" data-i18n="data.phrasesHint">Frasi pronte, scritte da chi assiste: la persona le trova in Frasi → Le mie frasi.</p>
+      <ul id="phrase-list" class="phrase-list"></ul>
+      <div class="voice-controls">
+        <input id="phrase-new" maxlength="200" placeholder="Nuova frase" data-i18n-placeholder="data.newPhrase" aria-label="Nuova frase" data-i18n-aria="data.newPhrase">
+        <button id="btn-phrase-add" data-i18n="data.add">Aggiungi</button>
+      </div>
+      <p class="muted backup-hint" data-i18n="data.backupHint">Copia di sicurezza: calibrazioni, parole imparate, frasi e impostazioni in un file che resta su questo dispositivo. Contiene dati personali.</p>
+      <div class="voice-controls">
+        <button id="btn-export" data-i18n="data.export">Esporta dati</button>
+        <label class="file-button"><span data-i18n="data.import">Importa dati</span>
+          <input type="file" id="import-file" accept="application/json,.json">
+        </label>
+      </div>
+      <p id="data-status" class="status"></p>
+    </div>
   </section>
 
   <!-- Barra per chi assiste (si usa con mouse/tocco, non con lo sguardo) -->
@@ -97,6 +128,8 @@
         <option value="both" data-i18n="bar.control.both">Controllo: occhi + testa</option>
       </select>
       <select id="lang-toolbar" class="lang-select" aria-label="Lingua" data-i18n-aria="bar.language" title="Lingua" data-i18n-title="bar.language"></select>
+      <select id="camera-select" hidden aria-label="Fotocamera" data-i18n-aria="bar.camera" title="Fotocamera" data-i18n-title="bar.camera"></select>
+      <button id="btn-pause" data-i18n="bar.pause">Pausa</button>
       <button id="btn-draw" title="" data-i18n-title="bar.drawTitle" data-i18n="bar.draw">Scrivi a mano</button>
       <button id="btn-dot">Punto: sì</button>
       <button id="btn-last-result" title="" data-i18n-title="bar.lastResultTitle" data-i18n="bar.lastResult">Ultimo risultato</button>
@@ -156,6 +189,23 @@
     </div>
     <div id="prompt-cells" class="cells"></div>
   </section>
+
+  <!-- Pausa: nessuna selezione finché la persona non riprende (occhi chiusi 2 s e riaperti) -->
+  <section id="pause" class="screen" hidden>
+    <h2 data-i18n="pause.title">In pausa</h2>
+    <p class="lead" data-i18n="pause.text">Per riprendere chiudi gli occhi per 2 secondi e riaprili. Chi assiste può toccare lo schermo.</p>
+  </section>
+
+  <!-- Chiamata d'aiuto: suona finché qualcuno la ferma, con lo sguardo o con un tocco -->
+  <section id="alarm" hidden>
+    <div class="prompt-info">
+      <h2 data-i18n="alarm.title">Chiamata d'aiuto</h2>
+      <p data-i18n="alarm.text">L'allarme suona finché qualcuno lo ferma.</p>
+    </div>
+    <div id="alarm-cells" class="cells"></div>
+  </section>
+
+  <div id="cam-lost" class="cam-lost" role="alert" hidden data-i18n="camera.lost">Fotocamera scollegata o ferma. Controlla il cavo: riprovo da solo…</div>
 
   <div id="toast" hidden></div>
   <div id="center-mark" hidden></div>

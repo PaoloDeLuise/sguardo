@@ -28,6 +28,15 @@ static web page: it works with any file server, for example GitHub Pages, and in
 the browser's voice. Python is only needed to run it on your own PC with `serve.py` and for the
 cloned voice.
 
+**No external services, and no internet after the first opening.** MediaPipe and the face model
+are in the repository (`vendor/`, about 23 MB): the page receives them from the same site that
+serves it and contacts no other server. With `serve.py` on your own PC internet is never needed.
+From the published site it is needed the first time; then the browser keeps everything and
+Sguardo starts without a connection too (with internet the latest version is always used,
+without it the last one opened). Only two things still need the network: the word list of a
+language never used before on that device and, from the phone with `serve.py --https`, the link
+to the PC (with the self-signed certificate the browser does not keep the page).
+
 ## Installation
 
 ```
@@ -75,7 +84,10 @@ and open **http://localhost:8000**. On macOS and Linux the command may be `pytho
    3. press **Clone the voice**, then try a phrase with **Listen**.
 
    More clean voice messages make the timbre more stable (up to about 30 seconds the intonation
-   improves too). Samples add up: **Delete voice** starts again from zero.
+   improves too). Samples add up: **Delete voice** starts again from zero. Any audio file is
+   fine, not only voice messages: up to 2 minutes of speech are used from each, after a light
+   clean-up (low rumble and background hiss reduced, silences removed, even volume). Music and
+   other voices are not removed: choose files where only the person is speaking.
 
 From then on, `serve.py` must always be started with the Python from `.venv-voce`.
 
@@ -132,11 +144,23 @@ done with the eyes.
    - **Delete** removes one letter; if you keep looking at it, it removes a whole word every 1.5 s.
    - Numbers and punctuation: group **Z J K W X Y / . , ? 123**, then **123**.
 3. **Phrases.** Ten phrases for needs (Yes, No, Help, Water, Pain...). In **My phrases** you
-   save the last phrase spoken (**Save**) and remove those that are no longer useful.
-4. **Menu: eyes closed for 2 seconds.** Recalibrate, fixation time, visible dot,
+   save the last phrase spoken (**Save**) and remove those that are no longer useful. The
+   caregiver can prepare them with the keyboard on the start screen (**Phrases and personal
+   data**): add, reorder, remove.
+   - **Help with alarm:** fixating **Help** speaks the phrase; keeping the gaze on the cell for
+     2 more seconds starts a loud alarm, which sounds until someone stops it (the person by
+     fixating **Stop the alarm**, the caregiver by touching it or with `Esc`). The volume is the
+     device's: keep it high.
+4. **Menu: eyes closed for 2 seconds.** Pause, recalibrate, control, handwriting,
+   **recent sentences** (the last 20 written and spoken: fixating one speaks it again, **Clear**
+   deletes them), **settings** (fixation time, visible dot, background, selection sound) and
    **continuous writing**: the letters arrive from the top, side by side and as large as they are
    probable; you look up, toward the wanted letter, to move forward and down to go back (and
    delete). From the menu you can switch to the vertical version (letters from the right).
+   - **Pause:** no cell is selected, so the person can watch TV or look at whoever is talking
+     without typing random letters. To resume, close the eyes for 2 seconds and open them again
+     (if they stay closed for more than 6 seconds the person is asleep and the pause stays); the
+     caregiver resumes by touching the screen.
 5. **Handwriting** (menu → *Handwriting*, or **Handwriting** in the bar, or the `H` key):
    the pointer draws a letter or a whole word. Designed for head mode, but
    it works in all of them. It is only active when you choose it: nothing changes for those who use the keyboard.
@@ -236,7 +260,15 @@ cells fill up; the one in the lead is highlighted.
   gray if the eye was moving). Right-click calibrates without selecting anything;
 - keys: `C` full calibration, `R` quick, `M` menu, `D` continuous writing, `H` handwriting, `P` dot,
   `Esc` interrupts the calibration;
-- **New person** deletes the saved calibrations (when Sguardo passes to another person);
+- **New person** deletes calibrations, learned words, saved phrases, taught letters and recent
+  sentences (when Sguardo passes to another person);
+- **Pause** in the bar suspends selections;
+- with more than one camera (laptop and USB webcam) the bar shows the **camera** choice: each
+  camera chosen by hand has its own calibrations. If the camera is disconnected or freezes, a red
+  notice appears with a sound, and Sguardo retries by itself until it comes back;
+- **Export data / Import data** (start screen): a copy of everything Sguardo keeps in the
+  browser, in a file that stays on the device. Useful to change browser or PC (calibrations are
+  only valid for the same screen and camera);
 - `http://localhost:8000/?mouse`: the mouse stands in for the gaze, to try without a camera.
 
 ### Cloned voice timings
@@ -254,14 +286,23 @@ PCs the times grow in proportion. To avoid making the person wait:
 
 - **Video:** processed only in the browser; it is neither saved nor sent.
 - **Data saved in the browser** (`localStorage`): calibrations, settings, the person's words and
-  phrases. **New person** deletes the calibrations; the site data is deleted from the
-  browser settings.
+  phrases, the sentence being written and the last 20 spoken sentences. They never leave the
+  device. **New person** deletes everything except the settings; the site data can also be
+  deleted from the browser settings. The **Export data** file contains the same data: treat it
+  as personal data.
 - **Data saved on the PC** (only with `serve.py`): `voce/` (voice messages, cloned voice, generated phrases;
   of the written ones only the last 100 are kept) and `recordings/` (calibrations saved with **Save data**,
   they contain the face points). Both folders are excluded from the repository and `serve.py` never
   serves them.
-- **External connections:** only to download MediaPipe (jsDelivr), the face model (Google) and,
-  once, the voice model. The page has a Content Security Policy that allows nothing else.
+- **External connections:** none from the page, which receives all its files (MediaPipe and the
+  face model included) from the site it was opened from; a Content Security Policy prevents it
+  from contacting other addresses. Only the cloned voice downloads its model once, from the PC.
+  Whoever hosts the site (for example GitHub Pages) sees, like any web server, the IP address of
+  those who open it.
+- **Copy for use without internet** (`sw.js`): it contains only the application's files (page,
+  scripts, word lists, MediaPipe, face model). Nothing of the person: no video, no calibrations,
+  no phrases, no requests to `serve.py` for the voice. It sends nothing and is deleted with the
+  site data from the browser settings.
 - **`serve.py`:** accepts requests only from the Sguardo page (check of `Host` and `Origin` and
   the `X-Sguardo` header, against requests from other sites and DNS rebinding). Operations that
   modify data (voice messages, cloning, recordings) are allowed only from the PC itself. It is a server
@@ -273,7 +314,7 @@ PCs the times grow in proportion. To avoid making the person wait:
 | Component | License |
 |---|---|
 | Sguardo code | [GNU AGPL-3.0](LICENSE) |
-| MediaPipe Face Landmarker (loaded by the browser) | Apache 2.0 |
+| MediaPipe Tasks Vision and Face Landmarker model (in `vendor/`) | Apache 2.0, see `vendor/mediapipe-0.10.14/LICENSE` |
 | `data/parole-it.txt` (from FrequencyWords) | CC BY-SA 4.0, see `data/LICENSE-parole-it.txt` |
 | `data/words-en.txt` (from FrequencyWords) | CC BY-SA 4.0, see `data/LICENSE-words-en.txt` |
 | `data/words-es.txt` (from FrequencyWords) | CC BY-SA 4.0, see `data/LICENSE-words-es.txt` |
@@ -317,6 +358,9 @@ node tools/simulate-dwell.mjs    # cell selection with a simulated gaze, PC and 
 Every change to `js/features.js`, `js/regression.js` or `js/pool.js` should be compared across several
 recordings, not just one: posture and light change from one session to the next.
 
+Recordings contain the face landmarks of whoever made them: **do not attach them to Issues**,
+which are public.
+
 | File | What it does |
 |---|---|
 | `index.html`, `css/style.css` | Page and style |
@@ -338,7 +382,10 @@ recordings, not just one: posture and light change from one session to the next.
 | `js/draw.js` | Handwriting: drawing area, pen (lowered by a gesture or a cell, lifted by the gesture or by staying still), end of drawing |
 | `js/gestures.js` | Gestures that lower the pen: wink and open mouth, with level and threshold |
 | `js/recognizer.js` | Drawn letters ($P), separation into letters, words from the dictionary, learned letters |
+| `js/sound.js` | Sounds generated by the browser: selection click, warning, help-call alarm |
 | `js/voice.js` | Cloned voice in the page (requests to `serve.py`, phrase memory) |
+| `vendor/` | MediaPipe 0.10.14 and the face model, copied unchanged (how to update them: `vendor/mediapipe-0.10.14/README.md`) |
+| `sw.js` | Service worker: keeps the page, MediaPipe and the face model for use without internet |
 | `serve.py` | Local server: files, voice, recordings; `--https` for the phone |
 | `voice.py` | Voice cloning and generation with XTTS-v2 |
 | `data/parole-it.txt` | 30,000 Italian words by frequency |
@@ -390,7 +437,6 @@ native speaker before relying on them: a mistake there is not just a typo.
 - Next-word suggestion even without a personal history (today, mid-sentence, it offers
   only frequent words).
 - A faster voice for slow PCs (the cloned voice uses XTTS-v2, a non-commercial license).
-- The ability to use Sguardo without an internet connection (MediaPipe and the face model stored locally).
 
 Reports and proposals are welcome in the
 [repository Issues](https://github.com/PaoloDeLuise/sguardo/issues), especially from those who use

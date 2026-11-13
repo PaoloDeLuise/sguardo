@@ -53,6 +53,8 @@ for (const code of codes) {
   assert.equal(LOCALES[code].phrases.length, 10, `${code}: dieci frasi rapide`);
   for (const p of [...LOCALES[code].phrases, ...LOCALES[code].morePhrases]) assert.ok(p.label && p.say, `${code}: frase incompleta`);
   assert.equal(new Set(LOCALES[code].phrases.map((p) => p.label)).size, 10, `${code}: etichette ripetute`);
+  // Una sola frase chiama aiuto con l'allarme (continuando a guardarla).
+  assert.equal(LOCALES[code].phrases.filter((p) => p.alarm).length, 1, `${code}: serve una frase con l'allarme`);
 }
 
 // 3) Tutti i testi usati nel codice e nella pagina esistono.

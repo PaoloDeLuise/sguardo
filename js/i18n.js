@@ -53,4 +53,5 @@ export function translatePage(root = document) {
   for (const el of root.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);
   for (const el of root.querySelectorAll("[data-i18n-aria]")) el.setAttribute("aria-label", t(el.dataset.i18nAria));
   for (const el of root.querySelectorAll("[data-i18n-value]")) el.value = t(el.dataset.i18nValue);
+  for (const el of root.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
 }
